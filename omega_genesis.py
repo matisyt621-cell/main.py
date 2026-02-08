@@ -12,7 +12,7 @@ def setup_imagemagick(path):
         return True
     return False
 
-# --- 2. INTELIGENTNE SKALOWANIE (Bez deformacji, dotyka ramek) ---
+# --- 2. LOGIKA SIDE-FIT (Dotyka boków, zachowuje proporcje) ---
 def process_image_916(img_file, target_res=(1080, 1920)):
     try:
         with Image.open(img_file) as img:
@@ -21,25 +21,27 @@ def process_image_916(img_file, target_res=(1080, 1920)):
             t_w, t_h = target_res
             img_w, img_h = img.size
             
-            # Obliczamy skalę potrzebną do wypełnienia szerokości i wysokości
-            scale_w = t_w / img_w
-            scale_h = t_h / img_h
+            # Obliczamy skalę tak, aby szerokość zawsze wynosiła 1080px (t_w)
+            scale = t_w / img_w
             
-            # Wybieramy większą skalę, aby zdjęcie "dotknęło" wszystkich ramek (Fill)
-            scale = max(scale_w, scale_h)
-            
-            new_size = (int(img_w * scale), int(img_h * scale))
+            new_size = (t_w, int(img_h * scale))
             img_resized = img.resize(new_size, Image.Resampling.LANCZOS)
             
-            # Wycinamy środek, aby idealnie pasował do 1080x1920
-            left = (img_resized.width - t_w) / 2
-            top = (img_resized.height - t_h) / 2
-            right = left + t_w
-            bottom = top + t_h
+            # Tworzymy czarne płótno 1080x1920
+            canvas = Image.new("RGB", target_res, (0, 0, 0))
             
-            img_final = img_resized.crop((left, top, right, bottom))
+            # Centrujemy pionowo przeskalowane zdjęcie
+            y_offset = (t_h - img_resized.height) // 2
             
-            return np.array(img_final)
+            # Jeśli zdjęcie po skalowaniu jest wyższe niż ekran (rzadkie), docinamy je
+            if y_offset < 0:
+                top_crop = abs(y_offset)
+                img_resized = img_resized.crop((0, top_crop, t_w, top_crop + t_h))
+                y_offset = 0
+                
+            canvas.paste(img_resized, (0, y_offset))
+            
+            return np.array(canvas)
     except Exception:
         return np.zeros((1920, 1080, 3), dtype="uint8")
 
@@ -93,8 +95,8 @@ def draw_text_on_canvas(text, config, res=(1080, 1920), is_preview=False):
     return np.array(combined)
 
 # --- 5. INTERFEJS ---
-st.set_page_config(page_title="OMEGA V12.84", layout="wide")
-st.title("Ω OMEGA V12.84 - AUTO FILL FRAME")
+st.set_page_config(page_title="OMEGA V12.85", layout="wide")
+st.title("Ω OMEGA V12.85 - SIDE TOUCH FIT")
 
 with st.sidebar:
     st.header("⚙️ SYSTEM")
@@ -133,7 +135,7 @@ with c3: u_mus = st.file_uploader("Muzyka", accept_multiple_files=True)
 if st.button("🚀 GENERUJ"):
     if u_cov and u_pho and texts_list:
         if len(u_cov) < v_count:
-            st.error(f"⚠️ Potrzebujesz {v_count} okładek dla unikalności!")
+            st.error(f"⚠️ Potrzebujesz {v_count} unikalnych okładek!")
         else:
             with st.status("🎬 Renderowanie...") as status:
                 sid = int(time.time())
