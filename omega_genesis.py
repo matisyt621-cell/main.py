@@ -12,17 +12,34 @@ def setup_imagemagick(path):
         return True
     return False
 
-# --- 2. LOGIKA ROZCIĄGANIA (Zamiast czarnych pasów) ---
+# --- 2. INTELIGENTNE SKALOWANIE (Bez deformacji, dotyka ramek) ---
 def process_image_916(img_file, target_res=(1080, 1920)):
     try:
         with Image.open(img_file) as img:
             img = ImageOps.exif_transpose(img).convert("RGB")
             
-            # Wymuszamy zmianę rozmiaru tak, aby zdjęcie wypełniło cały obszar 1080x1920
-            # To sprawi, że zdjęcie "rozciągnie się" do krawędzi (dotknie ramki)
-            img_resized = img.resize(target_res, Image.Resampling.LANCZOS)
+            t_w, t_h = target_res
+            img_w, img_h = img.size
             
-            return np.array(img_resized)
+            # Obliczamy skalę potrzebną do wypełnienia szerokości i wysokości
+            scale_w = t_w / img_w
+            scale_h = t_h / img_h
+            
+            # Wybieramy większą skalę, aby zdjęcie "dotknęło" wszystkich ramek (Fill)
+            scale = max(scale_w, scale_h)
+            
+            new_size = (int(img_w * scale), int(img_h * scale))
+            img_resized = img.resize(new_size, Image.Resampling.LANCZOS)
+            
+            # Wycinamy środek, aby idealnie pasował do 1080x1920
+            left = (img_resized.width - t_w) / 2
+            top = (img_resized.height - t_h) / 2
+            right = left + t_w
+            bottom = top + t_h
+            
+            img_final = img_resized.crop((left, top, right, bottom))
+            
+            return np.array(img_final)
     except Exception:
         return np.zeros((1920, 1080, 3), dtype="uint8")
 
@@ -76,8 +93,8 @@ def draw_text_on_canvas(text, config, res=(1080, 1920), is_preview=False):
     return np.array(combined)
 
 # --- 5. INTERFEJS ---
-st.set_page_config(page_title="OMEGA V12.83", layout="wide")
-st.title("Ω OMEGA V12.83 - STRETCH TO FRAME")
+st.set_page_config(page_title="OMEGA V12.84", layout="wide")
+st.title("Ω OMEGA V12.84 - AUTO FILL FRAME")
 
 with st.sidebar:
     st.header("⚙️ SYSTEM")
@@ -116,7 +133,7 @@ with c3: u_mus = st.file_uploader("Muzyka", accept_multiple_files=True)
 if st.button("🚀 GENERUJ"):
     if u_cov and u_pho and texts_list:
         if len(u_cov) < v_count:
-            st.error(f"⚠️ Potrzebujesz minimum {v_count} okładek dla unikalności!")
+            st.error(f"⚠️ Potrzebujesz {v_count} okładek dla unikalności!")
         else:
             with st.status("🎬 Renderowanie...") as status:
                 sid = int(time.time())
@@ -132,7 +149,6 @@ if st.button("🚀 GENERUJ"):
                 for p, f in zip(m_p, u_mus):
                     with open(p, "wb") as b: b.write(f.getbuffer())
 
-                # --- UNIKALNE OKŁADKI ---
                 available_covers = list(c_p)
                 random.shuffle(available_covers)
                 
@@ -141,7 +157,6 @@ if st.button("🚀 GENERUJ"):
                     current_cover = available_covers.pop()
                     txt = random.choice(texts_list)
                     
-                    # LOSOWY CZAS (8-10s)
                     target_duration = random.uniform(8.0, 10.0)
                     num_photos = int(target_duration / speed)
                     
