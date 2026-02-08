@@ -54,8 +54,8 @@ def draw_text_on_canvas(text, config, res=(1080, 1920), is_preview=False):
     return np.array(combined)
 
 # --- 3. INTERFEJS ---
-st.set_page_config(page_title="OMEGA V12.57", layout="wide")
-st.title("Ω OMEGA V12.57 - JPG/PNG STABILITY FIX")
+st.set_page_config(page_title="OMEGA V12.58", layout="wide")
+st.title("Ω OMEGA V12.58 - FINAL MOBILE BYPASS")
 
 with st.sidebar:
     st.header("🎨 KONFIGURACJA")
@@ -77,25 +77,24 @@ with st.sidebar:
     font_paths = {"League Gothic Regular": "LeagueGothic-Regular.otf", "League Gothic Condensed": "LeagueGothic-CondensedRegular.otf", "Impact": "impact.ttf"}
     config_dict = {'font_path': font_paths.get(f_font), 'f_size': f_size, 't_color': t_color, 's_width': s_width, 's_color': s_color, 'shd_x': shd_x, 'shd_y': shd_y, 'shd_blur': shd_blur, 'shd_alpha': shd_alpha, 'shd_color': shd_color}
 
-# --- 4. UPLOADER (Z JAWNYM WSPARCIEM DLA JPG/PNG) ---
+# --- 4. UPLOADER (CAŁKOWITY BRAK FILTRÓW DLA JPG) ---
 st.subheader("📂 PRZEŚLIJ PLIKI")
-# Jawnie prosimy o JPG, JPEG i PNG w obu polach
-u_cov = st.file_uploader("📥 OKŁADKI (Wybierz JPG lub PNG)", accept_multiple_files=True, type=["jpg", "jpeg", "png", "webp"], key="cov_multi")
-u_pho = st.file_uploader("🖼️ ZDJĘCIA (Wybierz JPG lub PNG)", accept_multiple_files=True, type=["jpg", "jpeg", "png", "webp"], key="pho_multi")
-u_mus = st.file_uploader("🎵 MUZYKA", accept_multiple_files=True, key="mus_multi")
+# Usunięto parametr 'type', aby telefon nie wiedział, że to JPG i nie blokował seryjnego wyboru
+u_cov = st.file_uploader("📥 OKŁADKI (Wybierz wiele)", accept_multiple_files=True, key=f"cov_final_{int(time.time())}")
+u_pho = st.file_uploader("🖼️ ZDJĘCIA (Wybierz wiele)", accept_multiple_files=True, key=f"pho_final_{int(time.time())}")
+u_mus = st.file_uploader("🎵 MUZYKA", accept_multiple_files=True, key=f"mus_final_{int(time.time())}")
 
 # --- 5. RENDERER ---
 if st.button("🚀 GENERUJ FILMY"):
     if u_cov and u_pho and texts_list:
-        with st.status("🎬 Przetwarzanie...") as status:
+        with st.status("🎬 Przetwarzanie plików...") as status:
             sid = int(time.time())
             
             def save_files(uploaded, prefix):
                 paths = []
                 for i, f in enumerate(uploaded):
-                    # Zachowujemy oryginalne rozszerzenie
-                    ext = f.name.split('.')[-1] if '.' in f.name else "jpg"
-                    p = f"{prefix}_{sid}_{i}.{ext}"
+                    # Nawet jeśli plik przyjdzie bez nazwy, nadajemy mu .jpg
+                    p = f"{prefix}_{sid}_{i}.jpg"
                     with open(p, "wb") as b:
                         b.write(f.getvalue())
                     paths.append(p)
@@ -123,6 +122,7 @@ if st.button("🚀 GENERUJ FILMY"):
                 
                 clips = [ImageClip(process_image_916(p)).set_duration(speed) for p in [chosen_cov] + batch_p]
                 base = concatenate_videoclips(clips, method="chain")
+                
                 txt_arr = draw_text_on_canvas(txt, config_dict)
                 txt_clip = ImageClip(txt_arr).set_duration(base.duration)
                 final_v = CompositeVideoClip([base, txt_clip], size=(1080, 1920))
