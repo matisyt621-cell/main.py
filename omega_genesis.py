@@ -54,16 +54,16 @@ def draw_text_on_canvas(text, config, res=(1080, 1920), is_preview=False):
     return np.array(combined)
 
 # --- 3. INTERFEJS ---
-st.set_page_config(page_title="OMEGA V12.56", layout="wide")
-st.title("Ω OMEGA V12.56 - PINTEREST UPLOADER FIX")
+st.set_page_config(page_title="OMEGA V12.57", layout="wide")
+st.title("Ω OMEGA V12.57 - JPG/PNG STABILITY FIX")
 
 with st.sidebar:
-    st.header("🎨 USTAWIENIA")
-    v_count = st.number_input("Filmy", 1, 100, 5)
+    st.header("🎨 KONFIGURACJA")
+    v_count = st.number_input("Ile filmów?", 1, 100, 5)
     speed = st.selectbox("Szybkość (s)", [0.1, 0.15, 0.2, 0.3], index=2)
     f_font = st.selectbox("Czcionka", ["League Gothic Regular", "League Gothic Condensed", "Impact"])
     f_size = st.slider("Wielkość", 10, 800, 82)
-    t_color = st.color_picker("Tekst", "#FFFFFF")
+    t_color = st.color_picker("Kolor tekstu", "#FFFFFF")
     s_width = st.slider("Obramowanie", 0, 30, 2)
     s_color = st.color_picker("Kolor obramowania", "#000000")
     st.subheader("🌑 Cień")
@@ -77,12 +77,12 @@ with st.sidebar:
     font_paths = {"League Gothic Regular": "LeagueGothic-Regular.otf", "League Gothic Condensed": "LeagueGothic-CondensedRegular.otf", "Impact": "impact.ttf"}
     config_dict = {'font_path': font_paths.get(f_font), 'f_size': f_size, 't_color': t_color, 's_width': s_width, 's_color': s_color, 'shd_x': shd_x, 'shd_y': shd_y, 'shd_blur': shd_blur, 'shd_alpha': shd_alpha, 'shd_color': shd_color}
 
-# --- 4. KLUCZOWA ZMIANA: ROZDZIELENIE I RESETOWANIE WIDGETÓW ---
-st.subheader("📂 WRZUĆ PLIKI")
-# Zmieniłem etykiety i klucze na całkowicie unikalne, by "oszukać" pamięć przeglądarki
-u_cov = st.file_uploader("📥 WRZUĆ TU OKŁADKI (te z Pinterest)", accept_multiple_files=True, key="unique_cov_uploader")
-u_pho = st.file_uploader("🖼️ WRZUĆ TU ZDJĘCIA (te co działają)", accept_multiple_files=True, key="unique_pho_uploader")
-u_mus = st.file_uploader("🎵 WRZUĆ MUZYKĘ", accept_multiple_files=True, key="unique_mus_uploader")
+# --- 4. UPLOADER (Z JAWNYM WSPARCIEM DLA JPG/PNG) ---
+st.subheader("📂 PRZEŚLIJ PLIKI")
+# Jawnie prosimy o JPG, JPEG i PNG w obu polach
+u_cov = st.file_uploader("📥 OKŁADKI (Wybierz JPG lub PNG)", accept_multiple_files=True, type=["jpg", "jpeg", "png", "webp"], key="cov_multi")
+u_pho = st.file_uploader("🖼️ ZDJĘCIA (Wybierz JPG lub PNG)", accept_multiple_files=True, type=["jpg", "jpeg", "png", "webp"], key="pho_multi")
+u_mus = st.file_uploader("🎵 MUZYKA", accept_multiple_files=True, key="mus_multi")
 
 # --- 5. RENDERER ---
 if st.button("🚀 GENERUJ FILMY"):
@@ -93,8 +93,9 @@ if st.button("🚀 GENERUJ FILMY"):
             def save_files(uploaded, prefix):
                 paths = []
                 for i, f in enumerate(uploaded):
-                    # Pinterest fix: ignorujemy oryginalną nazwę, nadajemy własną
-                    p = f"{prefix}_{sid}_{i}.jpg"
+                    # Zachowujemy oryginalne rozszerzenie
+                    ext = f.name.split('.')[-1] if '.' in f.name else "jpg"
+                    p = f"{prefix}_{sid}_{i}.{ext}"
                     with open(p, "wb") as b:
                         b.write(f.getvalue())
                     paths.append(p)
