@@ -53,13 +53,14 @@ def draw_text_on_canvas(text, config, res=(1080, 1920), is_preview=False):
     combined.paste(shd_layer, (0,0), shd_layer)
     combined.paste(txt_layer, (0,0), txt_layer)
     if is_preview:
-        bg = Image.new("RGB", res, (0, 255, 0)); bg.paste(combined, (0,0), combined)
+        bg = Image.new("RGB", res, (0, 255, 0))
+        bg.paste(combined, (0,0), combined)
         return bg
     return np.array(combined)
 
 # --- 3. INTERFEJS ---
-st.set_page_config(page_title="OMEGA V12.61", layout="wide")
-st.title("Ω OMEGA V12.61 - RANDOM DURATION (8-10s)")
+st.set_page_config(page_title="OMEGA V12.62", layout="wide")
+st.title("Ω OMEGA V12.62 - STABLE FIX")
 
 with st.sidebar:
     st.header("⚙️ USTAWIENIA")
@@ -87,35 +88,47 @@ with col1: u_cov = st.file_uploader("🖼️ OKŁADKI", accept_multiple_files=Tr
 with col2: u_pho = st.file_uploader("📷 ZDJĘCIA", accept_multiple_files=True)
 with col3: u_mus = st.file_uploader("🎵 MUZYKA", accept_multiple_files=True)
 
-# --- 5. RENDERER Z LOSOWANIEM CZASU ---
+# --- 5. RENDERER ---
 if st.button("🚀 GENERUJ FILMY"):
     if u_cov and u_pho and texts_list:
         with st.status("🎬 Renderowanie...") as status:
             sid = int(time.time())
+            
             def save_f(files, prefix):
                 out = []
                 for i, f in enumerate(files):
                     p = f"{prefix}_{sid}_{i}.jpg"
-                    with open(p, "wb") as b: b.write(f.getbuffer())
+                    with open(p, "wb") as b:
+                        b.write(f.getbuffer())
                     out.append(p)
                 return out
-            c_p = save_f(u_cov, "c"); p_p = save_f(u_pho, "p"); m_p = save_f(u_mus, "m")
 
-            avail_covers = list(c_p); random.shuffle(avail_covers)
+            c_p = save_f(u_cov, "c")
+            p_p = save_f(u_pho, "p")
+            m_p = save_f(u_mus, "m")
+
+            # Logika unikalnych okładek
+            avail_covers = list(c_p)
+            random.shuffle(avail_covers)
             final_vids = []
 
             for i in range(v_count):
-                if not avail_covers: avail_covers = list(c_p); random.shuffle(avail_covers)
+                if not avail_covers:
+                    avail_covers = list(c_p)
+                    random.shuffle(avail_covers)
+                
                 chosen_cov = avail_covers.pop()
                 txt = random.choice(texts_list)
                 
-                # --- LOSOWANIE CZASU 8-10s ---
+                # Losowanie czasu 8-10s
                 target_dur = random.uniform(8.0, 10.0)
                 req_photos = int(target_dur / speed)
                 
                 batch = []
                 while len(batch) < req_photos:
-                    pool = list(p_p); random.shuffle(pool); batch.extend(pool)
+                    pool = list(p_p)
+                    random.shuffle(pool)
+                    batch.extend(pool)
                 batch = batch[:req_photos]
                 
                 clips = [ImageClip(process_image_916(p)).set_duration(speed) for p in [chosen_cov] + batch]
@@ -132,12 +145,18 @@ if st.button("🚀 GENERUJ FILMY"):
                 out_n = f"v_{sid}_{i}.mp4"
                 final_v.write_videofile(out_n, fps=24, codec="libx264", audio_codec="aac", threads=1, logger=None, preset="ultrafast")
                 final_vids.append(out_n)
-                final_v.close(); base.close(); gc.collect()
+                final_v.close()
+                base.close()
+                gc.collect()
 
             zip_n = f"OMEGA_{sid}.zip"
             with zipfile.ZipFile(zip_n, 'w') as z:
-                for f in final_vids: z.write(f); os.remove(f)
-            for p in c_p+p_p+m_p: 
+                for f in final_vids:
+                    z.write(f)
+                    os.remove(f)
+            
+            for p in c_p + p_p + m_p: 
                 if os.path.exists(p): os.remove(p)
+                
             status.update(label="✅ Gotowe!", state="complete")
             st.download_button("📥 POBIERZ ZIP", open(zip_n, "rb"), file_name=zip_n)
