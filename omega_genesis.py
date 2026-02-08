@@ -1,145 +1,209 @@
 import streamlit as st
-import os, gc, random, time, zipfile
+import os
+import gc
+import random
+import time
+import zipfile
 import numpy as np
 from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter
 from moviepy.editor import ImageClip, CompositeVideoClip, concatenate_videoclips, AudioFileClip
 
-# --- 1. SILNIK GRAFICZNY ---
-def process_image_916(img_file, target_res=(1080, 1920)):
+# --- FUNKCJE POMOCNICZE ---
+
+def crop_to_916(file_path, target_size=(1080, 1920)):
+    """Kadruje zdjęcie do formatu 9:16 bez czarnych pasów."""
     try:
-        with Image.open(img_file) as img:
+        with Image.open(file_path) as img:
             img = ImageOps.exif_transpose(img).convert("RGB")
-            t_ratio = target_res[0] / target_res[1]
-            i_ratio = img.width / img.height
-            if i_ratio > t_ratio:
-                nw = int(target_res[1] * i_ratio)
-                img = img.resize((nw, target_res[1]), Image.Resampling.LANCZOS)
-                left = (nw - target_res[0]) / 2
-                img = img.crop((left, 0, left + target_res[0], target_res[1]))
+            t_w, t_h = target_size
+            img_ratio = img.width / img.height
+            target_ratio = t_w / t_h
+            
+            if img_ratio > target_ratio:
+                # Zdjęcie zbyt szerokie
+                new_w = int(t_h * img_ratio)
+                img = img.resize((new_w, t_h), Image.Resampling.LANCZOS)
+                left = (new_w - t_w) / 2
+                img = img.crop((left, 0, left + t_w, t_h))
             else:
-                nh = int(target_res[0] / i_ratio)
-                img = img.resize((target_res[0], nh), Image.Resampling.LANCZOS)
-                top = (nh - target_res[1]) / 2
-                img = img.crop((0, top, target_res[0], top + target_res[1]))
+                # Zdjęcie zbyt wąskie
+                new_h = int(t_w / img_ratio)
+                img = img.resize((t_w, new_h), Image.Resampling.LANCZOS)
+                top = (new_h - t_h) / 2
+                img = img.crop((0, top, t_w, top + t_h))
             return np.array(img)
-    except Exception:
+    except:
         return np.zeros((1920, 1080, 3), dtype="uint8")
 
-# --- 2. SILNIK TEKSTU ---
-def draw_text_on_canvas(text, config, res=(1080, 1920), is_preview=False):
-    txt_l = Image.new("RGBA", res, (0, 0, 0, 0))
-    shd_l = Image.new("RGBA", res, (0, 0, 0, 0))
-    d_t = ImageDraw.Draw(txt_l)
-    d_s = ImageDraw.Draw(shd_l)
+def create_text_overlay(text, cfg, size=(1080, 1920)):
+    """Tworzy przezroczystą warstwę z napisem i cieniem."""
+    canvas = Image.new("RGBA", size, (0, 0, 0, 0))
+    shadow_layer = Image.new("RGBA", size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(canvas)
+    draw_shd = ImageDraw.Draw(shadow_layer)
+    
     try:
-        font = ImageFont.truetype(config['font_path'], config['f_size'])
+        font = ImageFont.truetype(cfg['font_path'], cfg['f_size'])
     except:
         font = ImageFont.load_default()
+        
+    # Pozycjonowanie
+    bbox = draw.textbbox((0, 0), text, font=font)
+    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    x = (size[0] - w) // 2
+    y = (size[1] - h) // 2
     
-    bbox = d_t.textbbox((0, 0), text, font=font)
-    tw, th = bbox[2]-bbox[0], bbox[3]-bbox[1]
-    pos = ((res[0]-tw)//2, (res[1]-th)//2)
-    s_pos = (pos[0] + config['shd_x'], pos[1] + config['shd_y'])
+    # Rysowanie cienia
+    shd_hex = cfg['shd_color'].lstrip('#')
+    shd_rgb = tuple(int(shd_hex[i:i+2], 16) for i in (0, 2, 4))
+    draw_shd.text((x + cfg['shd_x'], y + cfg['shd_y']), text, 
+                  fill=(*shd_rgb, cfg['shd_alpha']), font=font)
     
-    c_s = config['shd_color'].lstrip('#')
-    rgb_s = tuple(int(c_s[i:i+2], 16) for i in (0, 2, 4))
-    d_s.text(s_pos, text, fill=(*rgb_s, config['shd_alpha']), font=font)
-    if config['shd_blur'] > 0:
-        shd_l = shd_l.filter(ImageFilter.GaussianBlur(config['shd_blur']))
+    if cfg['shd_blur'] > 0:
+        shadow_layer = shadow_layer.filter(ImageFilter.GaussianBlur(cfg['shd_blur']))
     
-    d_t.text(pos, text, fill=config['t_color'], font=font, stroke_width=config['s_width'], stroke_fill=config['s_color'])
-    combined = Image.new("RGBA", res, (0, 0, 0, 0))
-    combined.paste(shd_l, (0,0), shd_l)
-    combined.paste(txt_l, (0,0), txt_l)
-    return np.array(combined.convert("RGB") if is_preview else combined)
+    # Rysowanie tekstu głównego
+    draw.text((x, y), text, fill=cfg['t_color'], font=font, 
+              stroke_width=cfg['s_width'], stroke_fill=cfg['s_color'])
+    
+    # Połączenie warstw
+    out = Image.new("RGBA", size, (0, 0, 0, 0))
+    out.paste(shadow_layer, (0, 0), shadow_layer)
+    out.paste(canvas, (0, 0), canvas)
+    return np.array(out)
 
-# --- 3. INTERFEJS ---
-st.set_page_config(page_title="OMEGA V12.64", layout="wide")
-st.title("Ω OMEGA V12.64 - OPTIMUS")
+# --- INTERFEJS STRONY ---
+
+st.set_page_config(page_title="OMEGA V12.70", layout="wide")
+st.title("Ω OMEGA V12.70 - REBORN")
 
 with st.sidebar:
-    st.header("⚙️ OPCJE")
-    v_count = st.number_input("Ile filmów?", 1, 50, 5) # Zmniejszyłem max do 50 dla stabilności
-    speed = st.selectbox("Szybkość (s)", [0.1, 0.15, 0.2, 0.3], index=2)
-    f_font = st.selectbox("Czcionka", ["League Gothic Regular", "Impact"])
-    f_size = st.slider("Wielkość", 50, 500, 82)
-    t_color = st.color_picker("Tekst", "#FFFFFF")
-    s_width = st.slider("Stroke", 0, 20, 2)
-    s_color = st.color_picker("Stroke Kolor", "#000000")
+    st.header("🎨 STYLIZACJA")
+    num_vids = st.number_input("Ilość filmów do wygenerowania", 1, 100, 5)
+    slide_speed = st.selectbox("Szybkość zdjęć (sekundy)", [0.1, 0.15, 0.2, 0.3], index=2)
+    
+    st.divider()
+    font_choice = st.selectbox("Czcionka", ["League Gothic Regular", "Impact", "Arial"])
+    text_size = st.slider("Wielkość tekstu", 50, 600, 85)
+    text_color = st.color_picker("Kolor napisu", "#FFFFFF")
+    stroke_w = st.slider("Grubość obramowania", 0, 20, 2)
+    stroke_c = st.color_picker("Kolor obramowania", "#000000")
+    
     st.subheader("🌑 CIEŃ")
-    shd_x = st.slider("X", -100, 100, 2); shd_y = st.slider("Y", -100, 100, 15)
-    shd_blur = st.slider("Blur", 0, 50, 5); shd_alpha = st.slider("Alpha", 0, 255, 150)
-    shd_color = st.color_picker("Cień Kolor", "#000000")
-    raw_texts = st.text_area("Teksty", "example text")
-    texts_list = [t.strip() for t in raw_texts.split('\n') if t.strip()]
+    sx = st.slider("Przesunięcie X", -100, 100, 3)
+    sy = st.slider("Przesunięcie Y", -100, 100, 15)
+    s_blur = st.slider("Rozmycie cienia", 0, 50, 5)
+    s_alpha = st.slider("Przezroczystość cienia", 0, 255, 150)
+    s_color = st.color_picker("Kolor cienia", "#000000")
+    
+    st.divider()
+    txt_input = st.text_area("Lista tekstów (jeden na linię)", "Vibe Check")
+    all_texts = [line.strip() for line in txt_input.split('\n') if line.strip()]
 
-    f_paths = {"League Gothic Regular": "LeagueGothic-Regular.otf", "Impact": "impact.ttf"}
-    conf = {'font_path': f_paths.get(f_font), 'f_size': f_size, 't_color': t_color, 's_width': s_width, 's_color': s_color, 'shd_x': shd_x, 'shd_y': shd_y, 'shd_blur': shd_blur, 'shd_alpha': shd_alpha, 'shd_color': shd_color}
+    # Ścieżki czcionek
+    f_map = {"League Gothic Regular": "LeagueGothic-Regular.otf", "Impact": "impact.ttf", "Arial": "arial.ttf"}
+    current_cfg = {
+        'font_path': f_map.get(font_choice), 'f_size': text_size, 't_color': text_color,
+        's_width': stroke_w, 's_color': stroke_c, 'shd_x': sx, 'shd_y': sy,
+        'shd_blur': s_blur, 'shd_alpha': s_alpha, 'shd_color': s_color
+    }
 
-# --- 4. PLIKI ---
+# --- WGRYWANIE PLIKÓW ---
+
 c1, c2, c3 = st.columns(3)
-with c1: u_cov = st.file_uploader("OKŁADKI", accept_multiple_files=True)
-with c2: u_pho = st.file_uploader("ZDJĘCIA", accept_multiple_files=True)
-with c3: u_mus = st.file_uploader("MUZYKA", accept_multiple_files=True)
+with c1: u_covers = st.file_uploader("🖼️ OKŁADKI", accept_multiple_files=True)
+with c2: u_photos = st.file_uploader("📷 ZDJĘCIA", accept_multiple_files=True)
+with c3: u_audio = st.file_uploader("🎵 MUZYKA", accept_multiple_files=True)
 
-# --- 5. RENDERER ---
-if st.button("🚀 START"):
-    if u_cov and u_pho and texts_list:
-        status = st.empty()
-        sid = int(time.time())
-        
-        def save_tmp(upl, pref):
-            ps = []
-            for i, f in enumerate(upl):
-                p = f"tmp_{sid}_{pref}_{i}.jpg"
-                with open(p, "wb") as b: b.write(f.getbuffer())
-                ps.append(p)
-            return ps
+# --- PROCES GENEROWANIA ---
 
-        c_p = save_tmp(u_cov, "c"); p_p = save_tmp(u_pho, "p"); m_p = save_tmp(u_mus, "m")
-        a_covs = list(c_p); random.shuffle(a_covs)
-        vids = []
-
-        try:
-            for i in range(v_count):
-                status.write(f"⏳ Renderowanie filmu {i+1}/{v_count}...")
-                if not a_covs: a_covs = list(c_p); random.shuffle(a_covs)
-                
-                c_img = a_covs.pop()
-                dur = random.uniform(8.0, 10.0)
-                n_p = int(dur / speed)
-                
-                pool = []
-                while len(pool) < n_p:
-                    batch = list(p_p); random.shuffle(batch); pool.extend(batch)
-                pool = pool[:n_p]
-                
-                all_img_paths = [c_img] + pool
-                clips = [ImageClip(process_image_916(p)).set_duration(speed) for p in all_img_paths]
-                
-                video = concatenate_videoclips(clips, method="chain")
-                t_img = draw_text_on_canvas(random.choice(texts_list), conf)
-                t_clip = ImageClip(t_img).set_duration(video.duration)
-                
-                final = CompositeVideoClip([video, t_clip], size=(1080, 1920))
-                if m_p:
-                    a = AudioFileClip(random.choice(m_p))
-                    final = final.set_audio(a.subclip(0, min(a.duration, final.duration)))
-                
-                out = f"fin_{sid}_{i}.mp4"
-                final.write_videofile(out, fps=24, codec="libx264", audio_codec="aac", logger=None, preset="ultrafast")
-                vids.append(out)
-                
-                # Czyścimy pamięć natychmiast
-                final.close(); video.close(); gc.collect()
-
-            z_n = f"OMEGA_{sid}.zip"
-            with zipfile.ZipFile(z_n, 'w') as z:
-                for v in vids: z.write(v); os.remove(v)
-            for p in c_p + p_p + m_p: 
-                if os.path.exists(p): os.remove(p)
+if st.button("🚀 URUCHOM RENDERER"):
+    if u_covers and u_photos and all_texts:
+        with st.status("🎬 Trwa renderowanie... Proszę czekać.") as status:
+            session_id = int(time.time())
             
-            status.success("✅ Gotowe!")
-            st.download_button("📥 POBIERZ ZIP", open(z_n, "rb"), file_name=z_n)
-        except Exception as e:
-            st.error(f"Błąd: {e}")
+            def save_to_disk(uploaded_list, prefix):
+                paths = []
+                for i, f in enumerate(uploaded_list):
+                    path = f"file_{session_id}_{prefix}_{i}.jpg"
+                    with open(path, "wb") as buffer:
+                        buffer.write(f.getbuffer())
+                    paths.append(path)
+                return paths
+
+            p_covers = save_to_disk(u_covers, "cov")
+            p_photos = save_to_disk(u_photos, "pho")
+            p_music = save_to_disk(u_audio, "mus")
+
+            # Pula okładek (unikalność)
+            cover_pool = list(p_covers)
+            random.shuffle(cover_pool)
+            
+            created_files = []
+
+            for v in range(num_vids):
+                # Reset puli okładek jeśli się skończą
+                if not cover_pool:
+                    cover_pool = list(p_covers)
+                    random.shuffle(cover_pool)
+                
+                selected_cover = cover_pool.pop()
+                selected_text = random.choice(all_texts)
+                
+                # Losowanie czasu trwania (8-10s)
+                target_duration = random.uniform(8.0, 10.0)
+                needed_count = int(target_duration / slide_speed)
+                
+                # Budowanie puli zdjęć dla filmu
+                film_photos = []
+                while len(film_photos) < needed_count:
+                    temp_p = list(p_photos)
+                    random.shuffle(temp_p)
+                    film_photos.extend(temp_p)
+                film_photos = film_photos[:needed_count]
+                
+                # Składanie klipów
+                all_paths = [selected_cover] + film_photos
+                video_clips = [ImageClip(crop_to_916(p)).set_duration(slide_speed) for p in all_paths]
+                
+                # Łączenie wideo
+                base_video = concatenate_videoclips(video_clips, method="chain")
+                
+                # Nakładanie tekstu
+                text_img = create_text_overlay(selected_text, current_cfg)
+                overlay_clip = ImageClip(text_img).set_duration(base_video.duration)
+                
+                final_output = CompositeVideoClip([base_video, overlay_clip], size=(1080, 1920))
+                
+                # Muzyka
+                if p_music:
+                    m_file = random.choice(p_music)
+                    audio = AudioFileClip(m_file)
+                    final_output = final_output.set_audio(audio.subclip(0, min(audio.duration, final_output.duration)))
+                
+                # Export
+                out_name = f"video_{session_id}_{v}.mp4"
+                final_output.write_videofile(out_name, fps=24, codec="libx264", audio_codec="aac", logger=None, preset="ultrafast")
+                created_files.append(out_name)
+                
+                # Czyszczenie pamięci
+                final_output.close()
+                base_video.close()
+                gc.collect()
+
+            # Pakowanie do ZIP
+            zip_name = f"PACZKA_OMEGA_{session_id}.zip"
+            with zipfile.ZipFile(zip_name, 'w') as zipf:
+                for f in created_files:
+                    zipf.write(f)
+                    os.remove(f)
+            
+            # Usuwanie plików tymczasowych
+            for p in p_covers + p_photos + p_music:
+                if os.path.exists(p):
+                    os.remove(p)
+            
+            status.update(label="✅ Renderowanie zakończone!", state="complete")
+            st.download_button("📥 POBIERZ GOTOWE FILMY", open(zip_name, "rb"), file_name=zip_name)
+    else:
+        st.warning("⚠️ Brak plików! Wgraj okładki, zdjęcia i dodaj teksty.")
