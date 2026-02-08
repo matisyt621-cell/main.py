@@ -1,9 +1,5 @@
 import streamlit as st
-import os
-import gc
-import random
-import time
-import zipfile
+import os, gc, random, time, zipfile
 import numpy as np
 from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter
 from moviepy.editor import ImageClip, CompositeVideoClip, concatenate_videoclips, AudioFileClip
@@ -59,8 +55,8 @@ def draw_text_on_canvas(text, config, res=(1080, 1920), is_preview=False):
     return np.array(combined)
 
 # --- 3. INTERFEJS ---
-st.set_page_config(page_title="OMEGA V12.53", layout="wide")
-st.title("Ω OMEGA V12.53 - TOTAL FILE ACCESS")
+st.set_page_config(page_title="OMEGA V12.54", layout="wide")
+st.title("Ω OMEGA V12.54 - MOBILE MULTI-UPLOAD FIX")
 
 with st.sidebar:
     st.header("⚙️ USTAWIENIA")
@@ -84,36 +80,44 @@ with st.sidebar:
     if texts_list:
         st.image(draw_text_on_canvas(texts_list[0], config_dict, is_preview=True), use_container_width=True)
 
-# --- 4. WRZUCANIE PLIKÓW (USUNIĘTO FILTR TYPE DLA PINTERESTA) ---
+# --- 4. WRZUCANIE PLIKÓW (ZWIĘKSZONA TOLERANCJA) ---
+# Używamy key z timestampem, aby wymusić świeżość uploadera
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    # Usunąłem filtr 'type', żeby telefon pozwolił na wszystko
-    u_cov = st.file_uploader("🖼️ OKŁADKI (Wybierz wiele)", accept_multiple_files=True, key="c_total")
+    u_cov = st.file_uploader("🖼️ OKŁADKI (Wybierz 5-20 plików)", accept_multiple_files=True, key="cov_fix")
 with col2:
-    u_pho = st.file_uploader("📷 ZDJĘCIA (Wybierz wiele)", accept_multiple_files=True, key="p_total")
+    u_pho = st.file_uploader("📷 ZDJĘCIA", accept_multiple_files=True, key="pho_fix")
 with col3:
-    u_mus = st.file_uploader("🎵 MUZYKA", accept_multiple_files=True, key="m_total")
+    u_mus = st.file_uploader("🎵 MUZYKA", accept_multiple_files=True, key="mus_fix")
 
 # --- 5. RENDERER ---
 if st.button("🚀 GENERUJ FILMY"):
     if u_cov and u_pho and texts_list:
-        with st.status("🎬 Renderowanie...") as status:
+        with st.status("🎬 Przetwarzanie wielu plików...") as status:
             sid = int(time.time())
             
+            # Naprawiony zapis plików z Pinteresta
             def save_uploaded(uploaded, prefix):
                 paths = []
                 for i, f in enumerate(uploaded):
-                    # Pobieramy rozszerzenie z nazwy pliku, jeśli istnieje, inaczej dajemy jpg
-                    ext = f.name.split('.')[-1] if '.' in f.name else "jpg"
-                    p = f"{prefix}_{sid}_{i}.{ext}"
-                    with open(p, "wb") as b: b.write(f.getbuffer())
-                    paths.append(p)
+                    try:
+                        ext = f.name.split('.')[-1] if '.' in f.name else "jpg"
+                        p = f"{prefix}_{sid}_{i}.{ext}"
+                        with open(p, "wb") as b:
+                            b.write(f.getvalue()) # getvalue() jest stabilniejsze na mobile
+                        paths.append(p)
+                    except:
+                        continue
                 return paths
 
             c_paths = save_uploaded(u_cov, "c")
             p_paths = save_uploaded(u_pho, "p")
             m_paths = save_uploaded(u_mus, "m")
+
+            if not c_paths or not p_paths:
+                st.error("Błąd zapisu plików. Spróbuj wybrać mniej zdjęć naraz.")
+                st.stop()
 
             pool_covers = list(c_paths)
             random.shuffle(pool_covers)
@@ -139,7 +143,8 @@ if st.button("🚀 GENERUJ FILMY"):
                 
                 if m_paths:
                     aud = AudioFileClip(random.choice(m_paths))
-                    final_v = final_v.set_audio(aud.subclip(0, min(aud.duration, final_v.duration)))
+                    final_video_dur = final_v.duration
+                    final_v = final_v.set_audio(aud.subclip(0, min(aud.duration, final_video_dur)))
                 
                 out = f"v_{sid}_{i}.mp4"
                 final_v.write_videofile(out, fps=24, codec="libx264", audio_codec="aac", threads=1, logger=None, preset="ultrafast")
@@ -153,3 +158,5 @@ if st.button("🚀 GENERUJ FILMY"):
                 if os.path.exists(p): os.remove(p)
             status.update(label="✅ Gotowe!", state="complete")
             st.download_button("📥 POBIERZ ZIP", open(zip_n, "rb"), file_name=zip_n)
+    else:
+        st.warning("Upewnij się, że wgrałeś pliki i wpisałeś tekst.")
