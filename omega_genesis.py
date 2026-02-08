@@ -36,7 +36,8 @@ def draw_text_on_canvas(text, config, res=(1080, 1920), is_preview=False):
     draw_txt = ImageDraw.Draw(txt_layer)
     draw_shd = ImageDraw.Draw(shd_layer)
     try:
-        font = ImageFont.truetype(config['font_path'], config['f_size']) if config['font_path'] else ImageFont.load_default()
+        f_p = config['font_path']
+        font = ImageFont.truetype(f_p, config['f_size']) if f_p else ImageFont.load_default()
     except:
         font = ImageFont.load_default()
     bbox = draw_txt.textbbox((0, 0), text, font=font)
@@ -59,8 +60,8 @@ def draw_text_on_canvas(text, config, res=(1080, 1920), is_preview=False):
     return np.array(combined)
 
 # --- 3. INTERFEJS ---
-st.set_page_config(page_title="OMEGA V12.62", layout="wide")
-st.title("Ω OMEGA V12.62 - STABLE FIX")
+st.set_page_config(page_title="OMEGA V12.63", layout="wide")
+st.title("Ω OMEGA V12.63 - STABLE")
 
 with st.sidebar:
     st.header("⚙️ USTAWIENIA")
@@ -72,21 +73,27 @@ with st.sidebar:
     s_width = st.slider("Obramowanie", 0, 30, 2)
     s_color = st.color_picker("Obramowanie kolor", "#000000")
     st.subheader("🌑 CIEŃ")
-    shd_x = st.slider("X", -150, 150, 2); shd_y = st.slider("Y", -150, 150, 19)
-    shd_blur = st.slider("Blur", 0, 100, 5); shd_alpha = st.slider("Alpha", 0, 255, 146)
+    shd_x = st.slider("X", -150, 150, 2)
+    shd_y = st.slider("Y", -150, 150, 19)
+    shd_blur = st.slider("Blur", 0, 100, 5)
+    shd_alpha = st.slider("Alpha", 0, 255, 146)
     shd_color = st.color_picker("Cień kolor", "#000000")
     raw_texts = st.text_area("Teksty", "ig brands aint safe")
     texts_list = [t.strip() for t in raw_texts.split('\n') if t.strip()]
 
-    font_paths = {"League Gothic Regular": "LeagueGothic-Regular.otf", "League Gothic Condensed": "LeagueGothic-CondensedRegular.otf", "Impact": "impact.ttf"}
-    config_dict = {'font_path': font_paths.get(f_font), 'f_size': f_size, 't_color': t_color, 's_width': s_width, 's_color': s_color, 'shd_x': shd_x, 'shd_y': shd_y, 'shd_blur': shd_blur, 'shd_alpha': shd_alpha, 'shd_color': shd_color}
-    if texts_list: st.image(draw_text_on_canvas(texts_list[0], config_dict, is_preview=True), use_container_width=True)
+    f_paths = {"League Gothic Regular": "LeagueGothic-Regular.otf", "League Gothic Condensed": "LeagueGothic-CondensedRegular.otf", "Impact": "impact.ttf"}
+    config_dict = {'font_path': f_paths.get(f_font), 'f_size': f_size, 't_color': t_color, 's_width': s_width, 's_color': s_color, 'shd_x': shd_x, 'shd_y': shd_y, 'shd_blur': shd_blur, 'shd_alpha': shd_alpha, 'shd_color': shd_color}
+    if texts_list:
+        st.image(draw_text_on_canvas(texts_list[0], config_dict, is_preview=True), use_container_width=True)
 
 # --- 4. UPLOADER ---
 col1, col2, col3 = st.columns(3)
-with col1: u_cov = st.file_uploader("🖼️ OKŁADKI", accept_multiple_files=True)
-with col2: u_pho = st.file_uploader("📷 ZDJĘCIA", accept_multiple_files=True)
-with col3: u_mus = st.file_uploader("🎵 MUZYKA", accept_multiple_files=True)
+with col1:
+    u_cov = st.file_uploader("🖼️ OKŁADKI", accept_multiple_files=True)
+with col2:
+    u_pho = st.file_uploader("📷 ZDJĘCIA", accept_multiple_files=True)
+with col3:
+    u_mus = st.file_uploader("🎵 MUZYKA", accept_multiple_files=True)
 
 # --- 5. RENDERER ---
 if st.button("🚀 GENERUJ FILMY"):
@@ -94,20 +101,20 @@ if st.button("🚀 GENERUJ FILMY"):
         with st.status("🎬 Renderowanie...") as status:
             sid = int(time.time())
             
-            def save_f(files, prefix):
-                out = []
-                for i, f in enumerate(files):
+            def save_files(uploaded, prefix):
+                paths = []
+                for i, f in enumerate(uploaded):
                     p = f"{prefix}_{sid}_{i}.jpg"
                     with open(p, "wb") as b:
                         b.write(f.getbuffer())
-                    out.append(p)
-                return out
+                    paths.append(p)
+                return paths
 
-            c_p = save_f(u_cov, "c")
-            p_p = save_f(u_pho, "p")
-            m_p = save_f(u_mus, "m")
+            c_p = save_files(u_cov, "c")
+            p_p = save_files(u_pho, "p")
+            m_p = save_files(u_mus, "m")
 
-            # Logika unikalnych okładek
+            # Unikalność okładek
             avail_covers = list(c_p)
             random.shuffle(avail_covers)
             final_vids = []
@@ -120,23 +127,24 @@ if st.button("🚀 GENERUJ FILMY"):
                 chosen_cov = avail_covers.pop()
                 txt = random.choice(texts_list)
                 
-                # Losowanie czasu 8-10s
+                # Losowanie 8-10s
                 target_dur = random.uniform(8.0, 10.0)
                 req_photos = int(target_dur / speed)
                 
-                batch = []
-                while len(batch) < req_photos:
-                    pool = list(p_p)
-                    random.shuffle(pool)
-                    batch.extend(pool)
-                batch = batch[:req_photos]
+                p_pool = []
+                while len(p_pool) < req_photos:
+                    temp = list(p_p)
+                    random.shuffle(temp)
+                    p_pool.extend(temp)
+                p_pool = p_pool[:req_photos]
                 
-                clips = [ImageClip(process_image_916(p)).set_duration(speed) for p in [chosen_cov] + batch]
+                # Tworzenie klipów
+                clips = [ImageClip(process_image_916(p)).set_duration(speed) for p in [chosen_cov] + p_pool]
                 base = concatenate_videoclips(clips, method="chain")
                 
-                txt_arr = draw_text_on_canvas(txt, config_dict)
-                txt_clip = ImageClip(txt_arr).set_duration(base.duration)
-                final_v = CompositeVideoClip([base, txt_clip], size=(1080, 1920))
+                t_arr = draw_text_on_canvas(txt, config_dict)
+                t_clip = ImageClip(t_arr).set_duration(base.duration)
+                final_v = CompositeVideoClip([base, t_clip], size=(1080, 1920))
                 
                 if m_p:
                     aud = AudioFileClip(random.choice(m_p))
@@ -145,6 +153,7 @@ if st.button("🚀 GENERUJ FILMY"):
                 out_n = f"v_{sid}_{i}.mp4"
                 final_v.write_videofile(out_n, fps=24, codec="libx264", audio_codec="aac", threads=1, logger=None, preset="ultrafast")
                 final_vids.append(out_n)
+                
                 final_v.close()
                 base.close()
                 gc.collect()
@@ -155,8 +164,9 @@ if st.button("🚀 GENERUJ FILMY"):
                     z.write(f)
                     os.remove(f)
             
-            for p in c_p + p_p + m_p: 
-                if os.path.exists(p): os.remove(p)
+            for p in c_p + p_p + m_p:
+                if os.path.exists(p):
+                    os.remove(p)
                 
             status.update(label="✅ Gotowe!", state="complete")
             st.download_button("📥 POBIERZ ZIP", open(zip_n, "rb"), file_name=zip_n)
