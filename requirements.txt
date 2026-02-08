@@ -1,4 +1,6 @@
 streamlit
-moviepy
-pillow
+moviepy==1.0.3
+Pillow
 numpy
+decorator
+tqdm
