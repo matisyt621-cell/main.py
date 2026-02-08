@@ -2,7 +2,10 @@ import streamlit as st
 import os, gc, random, time, zipfile
 import numpy as np
 from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter
-from moviepy.editor import ImageClip, CompositeVideoClip, concatenate_videoclips, AudioFileClip
+from moviepy.video.VideoClip import ImageClip
+from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
+from moviepy.video.compositing.concatenate import concatenate_videoclips
+from moviepy.audio.io.AudioFileClip import AudioFileClip
 import moviepy.config as mpy_config
 
 # --- 1. KONFIGURACJA ŚRODOWISKA (ImageMagick) ---
@@ -218,3 +221,4 @@ if st.button("🚀 URUCHOM GENEROWANIE"):
             status.update(label="✅ Renderowanie zakończone!", state="complete")
 
             st.download_button("📥 POBIERZ PACZKĘ MP4", open(zip_final, "rb"), file_name=zip_final)
+
