@@ -5,27 +5,28 @@ from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter
 from moviepy.editor import ImageClip, CompositeVideoClip, concatenate_videoclips, AudioFileClip
 import moviepy.config as mpy_config
 
-# --- 1. KONFIGURACJA ŚRODOWISKA ---
+# --- 1. KONFIGURACJA ---
 def setup_imagemagick(path):
     if os.path.exists(path):
         mpy_config.change_settings({"IMAGEMAGICK_BINARY": path})
         return True
     return False
 
-# --- 2. LOGIKA GRAFICZNA (Thumbnail z centrowaniem) ---
+# --- 2. LOGIKA ROZCIĄGANIA (Zamiast czarnych pasów) ---
 def process_image_916(img_file, target_res=(1080, 1920)):
     try:
         with Image.open(img_file) as img:
             img = ImageOps.exif_transpose(img).convert("RGB")
-            canvas = Image.new("RGB", target_res, (0, 0, 0))
-            img.thumbnail(target_res, Image.Resampling.LANCZOS)
-            offset = ((target_res[0] - img.width) // 2, (target_res[1] - img.height) // 2)
-            canvas.paste(img, offset)
-            return np.array(canvas)
-    except Exception as e:
+            
+            # Wymuszamy zmianę rozmiaru tak, aby zdjęcie wypełniło cały obszar 1080x1920
+            # To sprawi, że zdjęcie "rozciągnie się" do krawędzi (dotknie ramki)
+            img_resized = img.resize(target_res, Image.Resampling.LANCZOS)
+            
+            return np.array(img_resized)
+    except Exception:
         return np.zeros((1920, 1080, 3), dtype="uint8")
 
-# --- 3. DYNAMICZNY SYSTEM CZCIONEK ---
+# --- 3. SYSTEM CZCIONEK ---
 def get_font_path(font_selection):
     font_files = {
         "League Gothic Regular": "LeagueGothic-Regular.otf",
@@ -37,7 +38,7 @@ def get_font_path(font_selection):
         return os.path.abspath(target)
     return "arial.ttf"
 
-# --- 4. SILNIK RYSOWANIA TEKSTU ---
+# --- 4. RYSOWANIE TEKSTU ---
 def draw_text_on_canvas(text, config, res=(1080, 1920), is_preview=False):
     txt_layer = Image.new("RGBA", res, (0, 0, 0, 0))
     shd_layer = Image.new("RGBA", res, (0, 0, 0, 0))
@@ -46,7 +47,7 @@ def draw_text_on_canvas(text, config, res=(1080, 1920), is_preview=False):
 
     try:
         font = ImageFont.truetype(config['font_path'], config['f_size'])
-    except Exception:
+    except:
         font = ImageFont.load_default()
 
     bbox = draw_txt.textbbox((0, 0), text, font=font)
@@ -75,8 +76,8 @@ def draw_text_on_canvas(text, config, res=(1080, 1920), is_preview=False):
     return np.array(combined)
 
 # --- 5. INTERFEJS ---
-st.set_page_config(page_title="OMEGA V12.80", layout="wide")
-st.title("Ω OMEGA V12.80 - UNIQUE COVERS")
+st.set_page_config(page_title="OMEGA V12.83", layout="wide")
+st.title("Ω OMEGA V12.83 - STRETCH TO FRAME")
 
 with st.sidebar:
     st.header("⚙️ SYSTEM")
@@ -93,10 +94,8 @@ with st.sidebar:
     s_color = st.color_picker("Kolor Obramowania", "#000000")
 
     st.divider()
-    shd_x = st.slider("Cień X", -100, 100, 2)
-    shd_y = st.slider("Cień Y", -100, 100, 19)
-    shd_blur = st.slider("Cień Blur", 0, 50, 5)
-    shd_alpha = st.slider("Cień Alpha", 0, 255, 146)
+    shd_x = st.slider("Cień X", -100, 100, 2); shd_y = st.slider("Cień Y", -100, 100, 19)
+    shd_blur = st.slider("Cień Blur", 0, 50, 5); shd_alpha = st.slider("Cień Alpha", 0, 255, 146)
     shd_color = st.color_picker("Kolor Cienia", "#000000")
 
     st.divider()
@@ -117,7 +116,7 @@ with c3: u_mus = st.file_uploader("Muzyka", accept_multiple_files=True)
 if st.button("🚀 GENERUJ"):
     if u_cov and u_pho and texts_list:
         if len(u_cov) < v_count:
-            st.error(f"⚠️ Masz tylko {len(u_cov)} okładek, a chcesz zrobić {v_count} filmów. Wgraj więcej okładek!")
+            st.error(f"⚠️ Potrzebujesz minimum {v_count} okładek dla unikalności!")
         else:
             with st.status("🎬 Renderowanie...") as status:
                 sid = int(time.time())
@@ -133,27 +132,22 @@ if st.button("🚀 GENERUJ"):
                 for p, f in zip(m_p, u_mus):
                     with open(p, "wb") as b: b.write(f.getbuffer())
 
-                # --- LOGIKA UNIKALNOŚCI OKŁADEK ---
+                # --- UNIKALNE OKŁADKI ---
                 available_covers = list(c_p)
                 random.shuffle(available_covers)
                 
                 final_vids = []
                 for i in range(v_count):
-                    st.write(f"Film {i + 1}/{v_count}...")
-                    
-                    # Pobranie unikalnej okładki
                     current_cover = available_covers.pop()
                     txt = random.choice(texts_list)
                     
-                    # --- LOSOWY CZAS (8-10s) ---
+                    # LOSOWY CZAS (8-10s)
                     target_duration = random.uniform(8.0, 10.0)
                     num_photos = int(target_duration / speed)
                     
-                    # Dobór zdjęć (losowe, mogą się powtarzać w różnych filmach)
                     batch_photos = [random.choice(p_p) for _ in range(num_photos)]
-                    
-                    # Budowa sekwencji (Okładka na start + reszta)
                     full_batch = [current_cover] + batch_photos
+                    
                     base = concatenate_videoclips([ImageClip(process_image_916(p)).set_duration(speed) for p in full_batch], method="chain")
 
                     txt_arr = draw_text_on_canvas(txt, config_dict)
