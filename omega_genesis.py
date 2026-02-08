@@ -5,7 +5,6 @@ from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter
 from moviepy.editor import ImageClip, CompositeVideoClip, concatenate_videoclips, AudioFileClip
 import moviepy.config as mpy_config
 
-
 # --- 1. KONFIGURACJA ŚRODOWISKA (ImageMagick) ---
 def setup_imagemagick(path):
     if os.path.exists(path):
@@ -217,4 +216,5 @@ if st.button("🚀 URUCHOM GENEROWANIE"):
                 if os.path.exists(p): os.remove(p)
 
             status.update(label="✅ Renderowanie zakończone!", state="complete")
+
             st.download_button("📥 POBIERZ PACZKĘ MP4", open(zip_final, "rb"), file_name=zip_final)
