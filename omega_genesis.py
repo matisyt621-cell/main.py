@@ -12,37 +12,32 @@ def setup_imagemagick(path):
         return True
     return False
 
-# --- 2. LOGIKA SIDE-FIT (Dotyka boków, zachowuje proporcje) ---
+# --- 2. LOGIKA SIDE-FIT (Pinterest Friendly) ---
 def process_image_916(img_file, target_res=(1080, 1920)):
     try:
         with Image.open(img_file) as img:
+            # Wymuszone RGB naprawia błędy z plikami .webp / .png z Pinteresta
             img = ImageOps.exif_transpose(img).convert("RGB")
             
             t_w, t_h = target_res
             img_w, img_h = img.size
             
-            # Obliczamy skalę tak, aby szerokość zawsze wynosiła 1080px (t_w)
             scale = t_w / img_w
-            
             new_size = (t_w, int(img_h * scale))
             img_resized = img.resize(new_size, Image.Resampling.LANCZOS)
             
-            # Tworzymy czarne płótno 1080x1920
             canvas = Image.new("RGB", target_res, (0, 0, 0))
-            
-            # Centrujemy pionowo przeskalowane zdjęcie
             y_offset = (t_h - img_resized.height) // 2
             
-            # Jeśli zdjęcie po skalowaniu jest wyższe niż ekran (rzadkie), docinamy je
             if y_offset < 0:
                 top_crop = abs(y_offset)
                 img_resized = img_resized.crop((0, top_crop, t_w, top_crop + t_h))
                 y_offset = 0
                 
             canvas.paste(img_resized, (0, y_offset))
-            
             return np.array(canvas)
     except Exception:
+        # W razie błędu zwraca czarną klatkę, zamiast wieszać cały program
         return np.zeros((1920, 1080, 3), dtype="uint8")
 
 # --- 3. SYSTEM CZCIONEK ---
@@ -57,7 +52,7 @@ def get_font_path(font_selection):
         return os.path.abspath(target)
     return "arial.ttf"
 
-# --- 4. RYSOWANIE TEKSTU ---
+# --- 4. RYSOWANIE TEKSTU (Preview Engine) ---
 def draw_text_on_canvas(text, config, res=(1080, 1920), is_preview=False):
     txt_layer = Image.new("RGBA", res, (0, 0, 0, 0))
     shd_layer = Image.new("RGBA", res, (0, 0, 0, 0))
@@ -89,14 +84,14 @@ def draw_text_on_canvas(text, config, res=(1080, 1920), is_preview=False):
     combined.paste(txt_layer, (0, 0), txt_layer)
 
     if is_preview:
-        bg = Image.new("RGB", res, (0, 255, 0))
+        bg = Image.new("RGB", res, (34, 139, 34)) # Leśna zieleń dla podglądu
         bg.paste(combined, (0, 0), combined)
         return bg
     return np.array(combined)
 
 # --- 5. INTERFEJS ---
-st.set_page_config(page_title="OMEGA V12.85", layout="wide")
-st.title("Ω OMEGA V12.85 - SIDE TOUCH FIT")
+st.set_page_config(page_title="OMEGA V12.86", layout="wide")
+st.title("Ω OMEGA V12.86 - STABLE PREVIEW")
 
 with st.sidebar:
     st.header("⚙️ SYSTEM")
@@ -126,18 +121,24 @@ with st.sidebar:
         's_width': s_width, 's_color': s_color, 'shd_x': shd_x, 'shd_y': shd_y,
         'shd_blur': shd_blur, 'shd_alpha': shd_alpha, 'shd_color': shd_color
     }
+    
+    # --- POWRÓT PREVIEW ---
+    if texts_list:
+        st.subheader("👁️ PODGLĄD")
+        p_img = draw_text_on_canvas(texts_list[0], config_dict, is_preview=True)
+        st.image(p_img.resize((300, 533)), use_container_width=False)
 
 c1, c2, c3 = st.columns(3)
-with c1: u_cov = st.file_uploader("Okładki", accept_multiple_files=True)
-with c2: u_pho = st.file_uploader("Zdjęcia", accept_multiple_files=True)
+with c1: u_cov = st.file_uploader("Okładki (Pinterest OK)", accept_multiple_files=True)
+with c2: u_pho = st.file_uploader("Zdjęcia (Bez powtórek)", accept_multiple_files=True)
 with c3: u_mus = st.file_uploader("Muzyka", accept_multiple_files=True)
 
-if st.button("🚀 GENERUJ"):
+if st.button("🚀 GENERUJ FILMY"):
     if u_cov and u_pho and texts_list:
         if len(u_cov) < v_count:
-            st.error(f"⚠️ Potrzebujesz {v_count} unikalnych okładek!")
+            st.error(f"⚠️ Potrzebujesz {v_count} okładek!")
         else:
-            with st.status("🎬 Renderowanie...") as status:
+            with st.status("🎬 Przetwarzanie plików...") as status:
                 sid = int(time.time())
                 c_p = [f"c_{sid}_{i}.jpg" for i in range(len(u_cov))]
                 for p, f in zip(c_p, u_cov):
@@ -154,17 +155,27 @@ if st.button("🚀 GENERUJ"):
                 available_covers = list(c_p)
                 random.shuffle(available_covers)
                 
+                # Pula zdjęć do losowania bez powtórek wewnątrz filmu
+                master_photo_pool = list(p_p)
+
                 final_vids = []
                 for i in range(v_count):
                     current_cover = available_covers.pop()
                     txt = random.choice(texts_list)
                     
                     target_duration = random.uniform(8.0, 10.0)
-                    num_photos = int(target_duration / speed)
+                    num_photos_needed = int(target_duration / speed)
                     
-                    batch_photos = [random.choice(p_p) for _ in range(num_photos)]
+                    # --- LOGIKA UNIKALNYCH ZDJĘĆ ---
+                    if len(master_photo_pool) < num_photos_needed:
+                        # Jeśli brakuje zdjęć w puli głównej, odśwież ją
+                        master_photo_pool = list(p_p)
+                    
+                    random.shuffle(master_photo_pool)
+                    # Wybieramy X unikalnych zdjęć i usuwamy je z puli głównej (pop)
+                    batch_photos = [master_photo_pool.pop() for _ in range(num_photos_needed)]
+                    
                     full_batch = [current_cover] + batch_photos
-                    
                     base = concatenate_videoclips([ImageClip(process_image_916(p)).set_duration(speed) for p in full_batch], method="chain")
 
                     txt_arr = draw_text_on_canvas(txt, config_dict)
