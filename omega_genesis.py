@@ -10,12 +10,11 @@ import moviepy.config as mpy_config
 # ==============================================================================
 
 class OmegaCore:
-    VERSION = "V12.89 UNLIMITED-POWER"
+    VERSION = "V12.89 UNLIMITED + SPREADSHEET EDITION"
     TARGET_RES = (1080, 1920)
     
     @staticmethod
     def setup_session():
-        """Inicjalizacja magazynów danych sesji."""
         keys = ['v_covers', 'v_photos', 'v_music', 'v_results']
         for key in keys:
             if key not in st.session_state:
@@ -23,12 +22,11 @@ class OmegaCore:
 
     @staticmethod
     def get_magick_path():
-        """Auto-detekcja ImageMagick: Linux vs Windows."""
         if os.name == 'posix': return "/usr/bin/convert"
         return r"C:\Program Files\ImageMagick-7.1.2-Q16-HDRI\magick.exe"
 
 # ==============================================================================
-# 2. SILNIK GRAFICZNY I PANNCERNY RENDER TEKSTU (FIX CIENIA)
+# 2. SILNIK GRAFICZNY I PANNCERNY RENDER TEKSTU
 # ==============================================================================
 
 def get_font_path(font_selection):
@@ -42,7 +40,6 @@ def get_font_path(font_selection):
     return "arial.ttf"
 
 def process_image_916(file_obj, target_res=OmegaCore.TARGET_RES):
-    """Side-Touch Engine: Skalowanie bez czarnych pasów."""
     try:
         file_bytes = file_obj.getvalue()
         with Image.open(io.BytesIO(file_bytes)) as img:
@@ -63,7 +60,6 @@ def process_image_916(file_obj, target_res=OmegaCore.TARGET_RES):
         return np.zeros((target_res[1], target_res[0], 3), dtype="uint8")
 
 def draw_text_pancerny(text, config, res=OmegaCore.TARGET_RES):
-    """Silnik Alpha-Stacking: Gwarantuje widoczność cienia i obramowania."""
     combined = Image.new("RGBA", res, (0, 0, 0, 0))
     shd_layer = Image.new("RGBA", res, (0, 0, 0, 0))
     txt_layer = Image.new("RGBA", res, (0, 0, 0, 0))
@@ -75,12 +71,10 @@ def draw_text_pancerny(text, config, res=OmegaCore.TARGET_RES):
 
     draw_txt = ImageDraw.Draw(txt_layer)
     draw_shd = ImageDraw.Draw(shd_layer)
-    
     bbox = draw_txt.textbbox((0, 0), text, font=font)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
     pos = ((res[0] - tw) // 2, (res[1] - th) // 2)
 
-    # 1. Rysowanie Cienia
     c_shd = config['shd_color'].lstrip('#')
     rgb_shd = tuple(int(c_shd[i:i+2], 16) for i in (0, 2, 4))
     shd_pos = (pos[0] + config['shd_x'], pos[1] + config['shd_y'])
@@ -88,17 +82,15 @@ def draw_text_pancerny(text, config, res=OmegaCore.TARGET_RES):
     if config['shd_blur'] > 0:
         shd_layer = shd_layer.filter(ImageFilter.GaussianBlur(config['shd_blur']))
 
-    # 2. Rysowanie Tekstu Głównego
     draw_txt.text(pos, text, fill=config['t_color'], font=font,
                   stroke_width=config['s_width'], stroke_fill=config['s_color'])
 
-    # 3. Składanie (Alpha Composite zapobiega 'dziurom' w przezroczystości)
     combined = Image.alpha_composite(combined, shd_layer)
     combined = Image.alpha_composite(combined, txt_layer)
     return combined
 
 # ==============================================================================
-# 3. INTERFEJS I KONFIGURACJA (SIDEBAR + PREVIEW)
+# 3. INTERFEJS I KONFIGURACJA
 # ==============================================================================
 
 OmegaCore.setup_session()
@@ -112,7 +104,8 @@ with st.sidebar:
     st.divider()
     st.header("🎨 TYPOGRAFIA")
     f_font = st.selectbox("Czcionka", ["League Gothic Regular", "League Gothic Condensed", "Impact"])
-    f_size = st.slider("Wielkość", 20, 500, 110)
+    # ZMIANA: Startowa wielkość ustawiona na 83
+    f_size = st.slider("Wielkość", 20, 500, 83)
     t_color = st.color_picker("Kolor tekstu", "#FFFFFF")
     s_width = st.slider("Obramowanie", 0, 20, 3)
     s_color = st.color_picker("Kolor Obrysu", "#000000")
@@ -125,7 +118,40 @@ with st.sidebar:
     shd_color = st.color_picker("Kolor Cienia", "#000000")
     
     st.divider()
-    raw_texts = st.text_area("Baza Tekstów", "IG BRANDS AINT SAFE\nOMEGA GENESIS")
+    # ZMIANA: Nowa lista tekstów
+    default_texts = (
+        "Most unique spreadsheet rn\n"
+        "Ig brands ain't safe\n"
+        "POV: You created best ig brands spreadsheet\n"
+        "Best archive spreadsheet rn\n"
+        "Archive fashion ain't safe\n"
+        "Best ig brands spreadsheet oat.\n"
+        "Best archive fashion spreadsheet rn.\n"
+        "Even ig brands ain't safe\n"
+        "POV: you have best spreadsheet on tiktok\n"
+        "pov: you found best spreadsheet\n"
+        "Swagest spreadsheet ever\n"
+        "Swagest spreadsheet in 2026\n"
+        "Coldest spreadsheet rn.\n"
+        "No more gatekeeping this spreadsheet\n"
+        "Ultimate archive clothing vault\n"
+        "Only fashion sheet needed\n"
+        "Best fashion sheet oat\n"
+        "IG brands ain't safe\n"
+        "I found the holy grail of spreadsheets\n"
+        "Took me 3 months to create best spreadsheet\n"
+        "I’m actually done gatekeeping this\n"
+        "Why did nobody tell me about this sheet earlier?\n"
+        "Honestly, best finds i’ve ever seen\n"
+        "pov: you’re not gatekeeping your sources anymore\n"
+        "pov: your fits are about to get 10x better\n"
+        "pov: you found the spreadsheet everyone was looking for\n"
+        "me after finding this archive sheet:\n"
+        "This spreadsheet is actually crazy\n"
+        "archive pieces you actually need\n"
+        "Spreadsheet just drooped"
+    )
+    raw_texts = st.text_area("Baza Tekstów", default_texts, height=300)
     texts_list = [t.strip() for t in raw_texts.split('\n') if t.strip()]
     
     cfg = {
@@ -137,23 +163,17 @@ with st.sidebar:
     st.divider()
     st.header("👁️ LIVE PREVIEW")
     if texts_list:
-        # Green Screen Preview
         p_bg = Image.new("RGB", OmegaCore.TARGET_RES, (0, 255, 0))
         t_lay = draw_text_pancerny(texts_list[0], cfg)
         p_bg.paste(t_lay, (0, 0), t_lay)
         st.image(p_bg, caption="Kontrast: Green Screen", use_container_width=True)
-        
-        if st.checkbox("Podgląd: Czarny"):
-            b_bg = Image.new("RGB", OmegaCore.TARGET_RES, (0, 0, 0))
-            b_bg.paste(t_lay, (0, 0), t_lay)
-            st.image(b_bg, use_container_width=True)
 
 # ==============================================================================
 # 4. SKARBIEC I MASOWA PRODUKCJA
 # ==============================================================================
 
 st.title(f"Ω OMEGA {OmegaCore.VERSION}")
-st.info("🚀 Tryb Unlimited: System przetwarza setki zdjęć bez zapychania RAMu.")
+st.info("🚀 Tryb Unlimited Aktywny. Twoja nowa baza tekstów została załadowana.")
 
 c1, c2, c3 = st.columns(3)
 with c1:
@@ -176,23 +196,14 @@ if st.button("🔥 URUCHOM SILNIK OMEGA", use_container_width=True):
             
             for idx, cov_file in enumerate(st.session_state.v_covers):
                 st.write(f"🎞️ Film {idx+1}/{len(st.session_state.v_covers)}...")
-                
-                # Dynamiczna pula zdjęć
                 sample = random.sample(st.session_state.v_photos, min(45, len(st.session_state.v_photos)))
-                
-                # Renderowanie klatek
                 clips = [ImageClip(process_image_916(cov_file)).set_duration(speed*3)]
                 clips += [ImageClip(process_image_916(p)).set_duration(speed) for p in sample]
-                
                 base = concatenate_videoclips(clips, method="chain")
-                
-                # Renderowanie Napisów (Pancerny Engine)
                 t_arr = np.array(draw_text_pancerny(random.choice(texts_list) if texts_list else "OMEGA", cfg))
                 txt_clip = ImageClip(t_arr).set_duration(base.duration)
-                
                 final = CompositeVideoClip([base, txt_clip], size=OmegaCore.TARGET_RES)
                 
-                # Dodawanie Audio
                 if st.session_state.v_music:
                     m_file = random.choice(st.session_state.v_music)
                     tmp_m = f"temp/aud_{idx}.mp3"
@@ -202,15 +213,11 @@ if st.button("🔥 URUCHOM SILNIK OMEGA", use_container_width=True):
 
                 out_name = f"OMEGA_{idx+1}.mp4"
                 final.write_videofile(out_name, fps=24, codec="libx264", audio_codec="aac", threads=4, logger=None, preset="ultrafast")
-                
                 st.session_state.v_results.append(out_name)
-                
-                # SPRZĄTANIE PAMIĘCI
                 final.close(); base.close(); gc.collect()
             
             status.update(label="✅ GOTOWE!", state="complete")
 
-# POBIERANIE
 if st.session_state.v_results:
     st.divider()
     st.header("📥 POBIERALNIA")
