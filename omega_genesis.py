@@ -10,7 +10,7 @@ import moviepy.config as mpy_config
 # ==============================================================================
 
 class OmegaCore:
-    VERSION = "V12.89 UNLIMITED + SPREADSHEET EDITION"
+    VERSION = "V12.89 UNLIMITED + TOP PREVIEW"
     TARGET_RES = (1080, 1920)
     
     @staticmethod
@@ -90,7 +90,7 @@ def draw_text_pancerny(text, config, res=OmegaCore.TARGET_RES):
     return combined
 
 # ==============================================================================
-# 3. INTERFEJS I KONFIGURACJA
+# 3. INTERFEJS I KONFIGURACJA (SIDEBAR Z PREVIEW NA GÓRZE)
 # ==============================================================================
 
 OmegaCore.setup_session()
@@ -99,14 +99,45 @@ mpy_config.change_settings({"IMAGEMAGICK_BINARY": OmegaCore.get_magick_path()})
 
 with st.sidebar:
     st.title("⚙️ CONFIGURATION")
-    speed = st.selectbox("Szybkość przejść (s)", [0.1, 0.15, 0.2, 0.25], index=1)
+
+    # --- LISTA TEKSTÓW (POTRZEBNA DO PREVIEW) ---
+    default_texts = (
+        "Most unique spreadsheet rn\nIg brands ain't safe\nPOV: You created best ig brands spreadsheet\n"
+        "Best archive spreadsheet rn\nArchive fashion ain't safe\nBest ig brands spreadsheet oat.\n"
+        "Best archive fashion spreadsheet rn.\nEven ig brands ain't safe\nPOV: you have best spreadsheet on tiktok\n"
+        "pov: you found best spreadsheet\nSwagest spreadsheet ever\nSwagest spreadsheet in 2026\n"
+        "Coldest spreadsheet rn.\nNo more gatekeeping this spreadsheet\nUltimate archive clothing vault\n"
+        "Only fashion sheet needed\nBest fashion sheet oat\nIG brands ain't safe\n"
+        "I found the holy grail of spreadsheets\nTook me 3 months to create best spreadsheet\n"
+        "I’m actually done gatekeeping this\nWhy did nobody tell me about this sheet earlier?\n"
+        "Honestly, best finds i’ve ever seen\npov: you’re not gatekeeping your sources anymore\n"
+        "pov: your fits are about to get 10x better\npov: you found the spreadsheet everyone was looking for\n"
+        "me after finding this archive sheet:\nThis spreadsheet is actually crazy\n"
+        "archive pieces you actually need\nSpreadsheet just drooped"
+    )
     
+    # --- DANE WEJŚCIOWE DO PREVIEW (UKŁAD GÓRNY) ---
+    f_font_pre = st.selectbox("Czcionka", ["League Gothic Regular", "League Gothic Condensed", "Impact"])
+    f_size_pre = st.slider("Wielkość", 20, 500, 83)
+    t_color_pre = st.color_picker("Kolor tekstu", "#FFFFFF")
+    
+    # --- LIVE PREVIEW (TERAZ NA GÓRZE) ---
+    st.header("👁️ LIVE PREVIEW")
+    tmp_cfg = {
+        'font_path': get_font_path(f_font_pre), 'f_size': f_size_pre, 't_color': t_color_pre,
+        's_width': 3, 's_color': "#000000", 'shd_x': 15, 'shd_y': 15,
+        'shd_blur': 8, 'shd_alpha': 200, 'shd_color': "#000000"
+    }
+    
+    p_bg = Image.new("RGB", OmegaCore.TARGET_RES, (0, 255, 0))
+    t_lay = draw_text_pancerny("PREVIEW TEXT", tmp_cfg)
+    p_bg.paste(t_lay, (0, 0), t_lay)
+    st.image(p_bg, caption="Kontrast: Green Screen", use_container_width=True)
     st.divider()
-    st.header("🎨 TYPOGRAFIA")
-    f_font = st.selectbox("Czcionka", ["League Gothic Regular", "League Gothic Condensed", "Impact"])
-    # ZMIANA: Startowa wielkość ustawiona na 83
-    f_size = st.slider("Wielkość", 20, 500, 83)
-    t_color = st.color_picker("Kolor tekstu", "#FFFFFF")
+
+    # --- RESZTA USTAWIEŃ ---
+    st.header("🎨 TYPOGRAFIA DETALE")
+    speed = st.selectbox("Szybkość przejść (s)", [0.1, 0.15, 0.2, 0.25], index=1)
     s_width = st.slider("Obramowanie", 0, 20, 3)
     s_color = st.color_picker("Kolor Obrysu", "#000000")
     
@@ -117,63 +148,20 @@ with st.sidebar:
     shd_alpha = st.slider("Cień Alpha", 0, 255, 200)
     shd_color = st.color_picker("Kolor Cienia", "#000000")
     
-    st.divider()
-    # ZMIANA: Nowa lista tekstów
-    default_texts = (
-        "Most unique spreadsheet rn\n"
-        "Ig brands ain't safe\n"
-        "POV: You created best ig brands spreadsheet\n"
-        "Best archive spreadsheet rn\n"
-        "Archive fashion ain't safe\n"
-        "Best ig brands spreadsheet oat.\n"
-        "Best archive fashion spreadsheet rn.\n"
-        "Even ig brands ain't safe\n"
-        "POV: you have best spreadsheet on tiktok\n"
-        "pov: you found best spreadsheet\n"
-        "Swagest spreadsheet ever\n"
-        "Swagest spreadsheet in 2026\n"
-        "Coldest spreadsheet rn.\n"
-        "No more gatekeeping this spreadsheet\n"
-        "Ultimate archive clothing vault\n"
-        "Only fashion sheet needed\n"
-        "Best fashion sheet oat\n"
-        "IG brands ain't safe\n"
-        "I found the holy grail of spreadsheets\n"
-        "Took me 3 months to create best spreadsheet\n"
-        "I’m actually done gatekeeping this\n"
-        "Why did nobody tell me about this sheet earlier?\n"
-        "Honestly, best finds i’ve ever seen\n"
-        "pov: you’re not gatekeeping your sources anymore\n"
-        "pov: your fits are about to get 10x better\n"
-        "pov: you found the spreadsheet everyone was looking for\n"
-        "me after finding this archive sheet:\n"
-        "This spreadsheet is actually crazy\n"
-        "archive pieces you actually need\n"
-        "Spreadsheet just drooped"
-    )
-    raw_texts = st.text_area("Baza Tekstów", default_texts, height=300)
+    raw_texts = st.text_area("Baza Tekstów", default_texts, height=200)
     texts_list = [t.strip() for t in raw_texts.split('\n') if t.strip()]
     
     cfg = {
-        'font_path': get_font_path(f_font), 'f_size': f_size, 't_color': t_color,
+        'font_path': get_font_path(f_font_pre), 'f_size': f_size_pre, 't_color': t_color_pre,
         's_width': s_width, 's_color': s_color, 'shd_x': shd_x, 'shd_y': shd_y,
         'shd_blur': shd_blur, 'shd_alpha': shd_alpha, 'shd_color': shd_color
     }
-
-    st.divider()
-    st.header("👁️ LIVE PREVIEW")
-    if texts_list:
-        p_bg = Image.new("RGB", OmegaCore.TARGET_RES, (0, 255, 0))
-        t_lay = draw_text_pancerny(texts_list[0], cfg)
-        p_bg.paste(t_lay, (0, 0), t_lay)
-        st.image(p_bg, caption="Kontrast: Green Screen", use_container_width=True)
 
 # ==============================================================================
 # 4. SKARBIEC I MASOWA PRODUKCJA
 # ==============================================================================
 
 st.title(f"Ω OMEGA {OmegaCore.VERSION}")
-st.info("🚀 Tryb Unlimited Aktywny. Twoja nowa baza tekstów została załadowana.")
 
 c1, c2, c3 = st.columns(3)
 with c1:
@@ -215,14 +203,12 @@ if st.button("🔥 URUCHOM SILNIK OMEGA", use_container_width=True):
                 final.write_videofile(out_name, fps=24, codec="libx264", audio_codec="aac", threads=4, logger=None, preset="ultrafast")
                 st.session_state.v_results.append(out_name)
                 final.close(); base.close(); gc.collect()
-            
             status.update(label="✅ GOTOWE!", state="complete")
 
 if st.session_state.v_results:
     st.divider()
-    st.header("📥 POBIERALNIA")
     cols = st.columns(4)
     for i, vid in enumerate(st.session_state.v_results):
         if os.path.exists(vid):
             with open(vid, "rb") as f:
-                cols[i % 4].download_button(f"🎥 Film {i+1}", f, file_name=vid)
+                cols[i % 4].download_button(f"🎥 Pobierz {i+1}", f, file_name=vid)
