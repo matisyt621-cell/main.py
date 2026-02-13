@@ -6,20 +6,20 @@ from moviepy.editor import ImageClip, CompositeVideoClip, concatenate_videoclips
 import moviepy.config as mpy_config
 
 # ==============================================================================
-# 1. KONFIGURACJA RDZENIA OMEGA V12.96
+# 1. KONFIGURACJA RDZENIA OMEGA V12.98
 # ==============================================================================
 
 class OmegaCore:
-    VERSION = "V12.96 LIVE-FIX"
+    VERSION = "V12.98 ZIP-STABLE (10-PACK)"
     TARGET_RES = (1080, 1920)
     SAFE_MARGIN = 90
     
     @staticmethod
     def setup_session():
-        keys = ['v_covers', 'v_photos', 'v_music', 'v_results', 'zip_ready']
+        keys = ['v_covers', 'v_photos', 'v_music', 'v_results', 'zip_files']
         for key in keys:
             if key not in st.session_state:
-                st.session_state[key] = [] if key != 'zip_ready' else None
+                st.session_state[key] = []
 
     @staticmethod
     def get_magick_path():
@@ -27,7 +27,7 @@ class OmegaCore:
         return r"C:\Program Files\ImageMagick-7.1.2-Q16-HDRI\magick.exe"
 
 # ==============================================================================
-# 2. SILNIK GRAFICZNY
+# 2. SILNIK GRAFICZNY I AUTO-SCALE
 # ==============================================================================
 
 def get_font_path(font_selection):
@@ -80,7 +80,6 @@ def draw_text_pancerny(text, config, res=OmegaCore.TARGET_RES):
     combined = Image.new("RGBA", res, (0, 0, 0, 0))
     shd_layer = Image.new("RGBA", res, (0, 0, 0, 0))
     txt_layer = Image.new("RGBA", res, (0, 0, 0, 0))
-    
     draw_txt = ImageDraw.Draw(txt_layer)
     draw_shd = ImageDraw.Draw(shd_layer)
     
@@ -104,47 +103,40 @@ def draw_text_pancerny(text, config, res=OmegaCore.TARGET_RES):
     return combined
 
 # ==============================================================================
-# 3. INTERFEJS I LIVE PREVIEW (FIXED)
+# 3. INTERFEJS I LIVE PREVIEW
 # ==============================================================================
 
 OmegaCore.setup_session()
-st.set_page_config(page_title="Ω OMEGA V12.96", layout="wide")
+st.set_page_config(page_title="Ω OMEGA V12.98", layout="wide")
 mpy_config.change_settings({"IMAGEMAGICK_BINARY": OmegaCore.get_magick_path()})
 
 with st.sidebar:
     st.title("⚙️ CONFIG")
 
-    # 1. Najpierw pobieramy wszystkie parametry z suwaków
     f_font = st.selectbox("Czcionka", ["League Gothic Regular", "League Gothic Condensed", "Impact"])
     f_size = st.slider("Max Wielkość", 20, 500, 83)
     t_color = st.color_picker("Kolor tekstu", "#FFFFFF")
     s_width = st.slider("Obrys", 0, 20, 3)
-    s_color = st.color_picker("Kolor Obrysu", "#000000")
     
     st.header("🌑 CIEŃ")
     shd_x = st.slider("Cień X", -100, 100, 15)
     shd_y = st.slider("Cień Y", -100, 100, 15)
-    shd_blur = st.slider("Blur", 0, 50, 8)
     shd_alpha = st.slider("Alpha", 0, 255, 200)
-    shd_color = st.color_picker("Kolor Cienia", "#000000")
 
-    # 2. Tworzymy obiekt konfiguracji, który będzie użyty i w podglądzie, i w filmie
     cfg = {
         'font_path': get_font_path(f_font), 'f_size': f_size, 't_color': t_color,
-        's_width': s_width, 's_color': s_color, 'shd_x': shd_x, 'shd_y': shd_y,
-        'shd_blur': shd_blur, 'shd_alpha': shd_alpha, 'shd_color': shd_color
+        's_width': s_width, 's_color': "#000000", 'shd_x': shd_x, 'shd_y': shd_y,
+        'shd_blur': 8, 'shd_alpha': shd_alpha, 'shd_color': "#000000"
     }
 
-    # 3. Wyświetlamy podgląd na górze, który TERAZ reaguje na suwaki powyżej
     st.header("👁️ LIVE PREVIEW")
     sim_bg = Image.new("RGB", OmegaCore.TARGET_RES, (15, 15, 15)) 
     draw_sim = ImageDraw.Draw(sim_bg)
-    draw_sim.rectangle([0, 625, 1080, 1295], fill=(0, 255, 0)) 
+    draw_sim.rectangle([0, 625, 1080, 1295], fill=(0, 255, 0)) # Ultra Safe Zone
     
-    # Renderujemy tekst podglądu z aktualnym cfg
-    t_lay = draw_text_pancerny("LIVE PREVIEW TEST", cfg)
+    t_lay = draw_text_pancerny("PREVIEW SAFE ZONE", cfg)
     sim_bg.paste(t_lay, (0, 0), t_lay)
-    st.image(sim_bg, caption="Podgląd reaguje na suwaki!", use_container_width=True)
+    st.image(sim_bg, caption="Podgląd Safe Zone (2.5x)", use_container_width=True)
     
     st.divider()
     speed = st.selectbox("Szybkość (s)", [0.1, 0.12, 0.15, 0.2], index=2)
@@ -154,7 +146,7 @@ with st.sidebar:
     texts_list = [t.strip() for t in raw_texts.split('\n') if t.strip()]
 
 # ==============================================================================
-# 4. PRODUKCJA (IDENTYCZNA Z PODGLĄDEM)
+# 4. SILNIK PRODUKCJI (MULTI-ZIP 10-PACK)
 # ==============================================================================
 
 st.title(f"Ω OMEGA {OmegaCore.VERSION}")
@@ -164,41 +156,75 @@ with c1: u_c = st.file_uploader("Okładki", type=['png','jpg','jpeg'], accept_mu
 with c2: u_p = st.file_uploader("Zdjęcia (Bulk)", type=['png','jpg','jpeg'], accept_multiple_files=True)
 with c3: u_m = st.file_uploader("Muzyka", type=['mp3'], accept_multiple_files=True)
 
-if st.button("🚀 URUCHOM PRODUKCJĘ MASOWĄ", use_container_width=True):
+if st.button("🚀 URUCHOM PRODUKCJĘ I DZIEL ZIPY", use_container_width=True):
     if not u_c or not u_p:
-        st.error("Wgraj okładki i zdjęcia!")
+        st.error("Brak danych!")
     else:
         st.session_state.v_results = []
+        st.session_state.zip_files = []
         with st.status("🎬 Renderowanie...", expanded=True) as status:
             if not os.path.exists("temp"): os.makedirs("temp")
+            
             for idx, cov_file in enumerate(u_c):
+                # 1. TIME GUARD (8-10s)
                 target_dur = random.uniform(8.5, 9.8)
                 cov_dur = speed * 3
                 num_p = int((target_dur - cov_dur) / speed)
-                st.write(f"🎞️ Film {idx+1}/{len(u_c)} | Czas: {target_dur:.1f}s")
+                
+                st.write(f"🎞️ Render {idx+1}/{len(u_c)} | {target_dur:.1f}s")
+                
                 sample = random.sample(u_p, min(num_p, len(u_p)))
                 clips = [ImageClip(process_image_916(cov_file)).set_duration(cov_dur)]
                 clips += [ImageClip(process_image_916(p)).set_duration(speed) for p in sample]
+                
                 base = concatenate_videoclips(clips, method="chain")
+                
+                # 2. AUTO-SCALE TEXT
                 t_arr = np.array(draw_text_pancerny(random.choice(texts_list), cfg))
                 txt_clip = ImageClip(t_arr).set_duration(base.duration)
+                
                 final = CompositeVideoClip([base, txt_clip], size=OmegaCore.TARGET_RES)
+                
+                # 3. AUDIO
                 if u_m:
                     m_file = random.choice(u_m)
-                    tmp_m = f"temp/a_{idx}.mp3"; f_aud = open(tmp_m, "wb"); f_aud.write(m_file.getbuffer()); f_aud.close()
+                    tmp_m = f"temp/a_{idx}.mp3"
+                    with open(tmp_m, "wb") as f: f.write(m_file.getbuffer())
                     aud = AudioFileClip(tmp_m)
                     final = final.set_audio(aud.subclip(0, min(aud.duration, final.duration)))
+
                 out_name = f"OMEGA_{idx+1}.mp4"
                 final.write_videofile(out_name, fps=24, codec="libx264", audio_codec="aac", threads=4, logger=None, preset="ultrafast")
                 st.session_state.v_results.append(out_name)
                 final.close(); base.close(); gc.collect()
-            zip_n = "OMEGA_EXPORT.zip"
-            with zipfile.ZipFile(zip_n, 'w') as z:
-                for f in st.session_state.v_results: z.write(f)
-            st.session_state.zip_ready = zip_n
-            status.update(label="✅ GOTOWE!", state="complete")
 
-if st.session_state.zip_ready:
+            # --- PAKOWANIE PO 10 SZTUK ---
+            st.write("📦 Dzielenie na paczki po 10 filmów...")
+            chunk_size = 10 
+            for i in range(0, len(st.session_state.v_results), chunk_size):
+                chunk = st.session_state.v_results[i:i + chunk_size]
+                part_num = (i // chunk_size) + 1
+                zip_n = f"OMEGA_PART_{part_num}.zip"
+                
+                with zipfile.ZipFile(zip_n, 'w', compression=zipfile.ZIP_STORED) as z:
+                    for f in chunk:
+                        if os.path.exists(f): z.write(f)
+                st.session_state.zip_files.append(zip_n)
+            
+            status.update(label="✅ PRODUKCJA ZAKOŃCZONA!", state="complete")
+
+# SEKCOJA POBIERANIA
+if st.session_state.zip_files:
     st.divider()
-    with open(st.session_state.zip_ready, "rb") as f:
-        st.download_button("📥 POBIERZ ZIP", f, file_name=st.session_state.zip_ready, use_container_width=True)
+    st.subheader("📥 Gotowe paczki (po 10 filmów):")
+    cols = st.columns(min(len(st.session_state.zip_files), 5))
+    for idx, zip_path in enumerate(st.session_state.zip_files):
+        with open(zip_path, "rb") as f:
+            cols[idx % 5].download_button(label=f"📂 Paczka {idx+1}", data=f, file_name=zip_path)
+
+    if st.button("🗑️ WYCZYŚĆ SERWER"):
+        for f in st.session_state.v_results + st.session_state.zip_files:
+            if os.path.exists(f): os.remove(f)
+        st.session_state.v_results = []
+        st.session_state.zip_files = []
+        st.rerun()
