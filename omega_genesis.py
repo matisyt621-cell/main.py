@@ -10,7 +10,7 @@ import moviepy.config as mpy_config
 # ==============================================================================
 
 class OmegaCore:
-    VERSION = "V12.89 UNLIMITED + TOP PREVIEW"
+    VERSION = "V12.89 UNLIMITED + SAFE-ZONE PREVIEW"
     TARGET_RES = (1080, 1920)
     
     @staticmethod
@@ -26,7 +26,7 @@ class OmegaCore:
         return r"C:\Program Files\ImageMagick-7.1.2-Q16-HDRI\magick.exe"
 
 # ==============================================================================
-# 2. SILNIK GRAFICZNY I PANNCERNY RENDER TEKSTU
+# 2. SILNIK GRAFICZNY I RENDER TEKSTU
 # ==============================================================================
 
 def get_font_path(font_selection):
@@ -90,7 +90,7 @@ def draw_text_pancerny(text, config, res=OmegaCore.TARGET_RES):
     return combined
 
 # ==============================================================================
-# 3. INTERFEJS I KONFIGURACJA (SIDEBAR Z PREVIEW NA GÓRZE)
+# 3. INTERFEJS I KONFIGURACJA (SIDEBAR Z SYMULACJĄ SAFE-ZONE)
 # ==============================================================================
 
 OmegaCore.setup_session()
@@ -100,7 +100,7 @@ mpy_config.change_settings({"IMAGEMAGICK_BINARY": OmegaCore.get_magick_path()})
 with st.sidebar:
     st.title("⚙️ CONFIGURATION")
 
-    # --- LISTA TEKSTÓW (POTRZEBNA DO PREVIEW) ---
+    # --- LISTA TEKSTÓW ---
     default_texts = (
         "Most unique spreadsheet rn\nIg brands ain't safe\nPOV: You created best ig brands spreadsheet\n"
         "Best archive spreadsheet rn\nArchive fashion ain't safe\nBest ig brands spreadsheet oat.\n"
@@ -115,24 +115,32 @@ with st.sidebar:
         "me after finding this archive sheet:\nThis spreadsheet is actually crazy\n"
         "archive pieces you actually need\nSpreadsheet just drooped"
     )
-    
-    # --- DANE WEJŚCIOWE DO PREVIEW (UKŁAD GÓRNY) ---
+
+    # --- PARAMETRY DO PREVIEW ---
     f_font_pre = st.selectbox("Czcionka", ["League Gothic Regular", "League Gothic Condensed", "Impact"])
     f_size_pre = st.slider("Wielkość", 20, 500, 83)
     t_color_pre = st.color_picker("Kolor tekstu", "#FFFFFF")
+
+    # --- LIVE PREVIEW Z SYMULACJĄ GÓRA/DÓŁ ---
+    st.header("👁️ SAFE-ZONE SIMULATOR")
     
-    # --- LIVE PREVIEW (TERAZ NA GÓRZE) ---
-    st.header("👁️ LIVE PREVIEW")
+    # Tworzymy tło symulacji: Czarny (góra) -> Zielony (środek) -> Czarny (dół)
+    # Rozkład: 250px góra (czarny), 1420px środek (zielony), 250px dół (czarny)
+    sim_bg = Image.new("RGB", OmegaCore.TARGET_RES, (20, 20, 20)) # Ciemne tło ogólne
+    draw_sim = ImageDraw.Draw(sim_bg)
+    # Rysujemy jasny zielony prostokąt w bezpiecznej strefie
+    draw_sim.rectangle([0, 250, 1080, 1670], fill=(0, 255, 0)) 
+    
+    # Renderujemy tekst podglądu
     tmp_cfg = {
         'font_path': get_font_path(f_font_pre), 'f_size': f_size_pre, 't_color': t_color_pre,
         's_width': 3, 's_color': "#000000", 'shd_x': 15, 'shd_y': 15,
         'shd_blur': 8, 'shd_alpha': 200, 'shd_color': "#000000"
     }
+    t_lay = draw_text_pancerny("SAFE ZONE TEST", tmp_cfg)
+    sim_bg.paste(t_lay, (0, 0), t_lay)
     
-    p_bg = Image.new("RGB", OmegaCore.TARGET_RES, (0, 255, 0))
-    t_lay = draw_text_pancerny("PREVIEW TEXT", tmp_cfg)
-    p_bg.paste(t_lay, (0, 0), t_lay)
-    st.image(p_bg, caption="Kontrast: Green Screen", use_container_width=True)
+    st.image(sim_bg, caption="Symulacja: Czarny (UI) | Zielony (Video)", use_container_width=True)
     st.divider()
 
     # --- RESZTA USTAWIEŃ ---
@@ -148,7 +156,7 @@ with st.sidebar:
     shd_alpha = st.slider("Cień Alpha", 0, 255, 200)
     shd_color = st.color_picker("Kolor Cienia", "#000000")
     
-    raw_texts = st.text_area("Baza Tekstów", default_texts, height=200)
+    raw_texts = st.text_area("Baza Tekstów", default_texts, height=150)
     texts_list = [t.strip() for t in raw_texts.split('\n') if t.strip()]
     
     cfg = {
@@ -158,7 +166,7 @@ with st.sidebar:
     }
 
 # ==============================================================================
-# 4. SKARBIEC I MASOWA PRODUKCJA
+# 4. MASOWA PRODUKCJA
 # ==============================================================================
 
 st.title(f"Ω OMEGA {OmegaCore.VERSION}")
