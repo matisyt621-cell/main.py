@@ -6,20 +6,19 @@ from moviepy.editor import ImageClip, CompositeVideoClip, concatenate_videoclips
 import moviepy.config as mpy_config
 
 # ==============================================================================
-# 1. RDZEŃ SYSTEMU OMEGA V12.89 UNLIMITED
+# 1. KONFIGURACJA SYSTEMOWA OMEGA V12.89 UNLIMITED
 # ==============================================================================
 
 class OmegaCore:
-    VERSION = "V12.89 UNLIMITED-DATA"
+    VERSION = "V12.89 UNLIMITED + GREEN PREVIEW"
     TARGET_RES = (1080, 1920)
     
     @staticmethod
     def setup_session():
-        """Inicjalizacja bez limitów pamięci."""
-        if 'vault_covers' not in st.session_state: st.session_state.vault_covers = []
-        if 'vault_photos' not in st.session_state: st.session_state.vault_photos = []
-        if 'vault_music' not in st.session_state: st.session_state.vault_music = []
-        if 'finished_videos' not in st.session_state: st.session_state.finished_videos = []
+        if 'v_covers' not in st.session_state: st.session_state.v_covers = []
+        if 'v_photos' not in st.session_state: st.session_state.v_photos = []
+        if 'v_music' not in st.session_state: st.session_state.v_music = []
+        if 'v_results' not in st.session_state: st.session_state.v_results = []
 
     @staticmethod
     def get_magick_path():
@@ -27,13 +26,22 @@ class OmegaCore:
         return r"C:\Program Files\ImageMagick-7.1.2-Q16-HDRI\magick.exe"
 
 # ==============================================================================
-# 2. SILNIK GRAFICZNY - TRYB OSZCZĘDZANIA RAM
+# 2. SILNIK GRAFICZNY I RENDEROWANIE TEKSTU
 # ==============================================================================
 
+def get_font_path(font_selection):
+    font_files = {
+        "League Gothic Regular": "LeagueGothic-Regular.otf",
+        "League Gothic Condensed": "LeagueGothic-CondensedRegular.otf",
+        "Impact": "impact.ttf"
+    }
+    target = font_files.get(font_selection)
+    if target and os.path.exists(target): return os.path.abspath(target)
+    return "arial.ttf"
+
 def process_image_unlimited(file_obj, target_res=OmegaCore.TARGET_RES):
-    """Przetwarza obraz bezpośrednio z bufora, nie obciążając pamięci stałej."""
+    """Side-Touch Engine: Skalowanie i dopasowanie do 9:16."""
     try:
-        # Odczytujemy bajty, aby nie blokować pliku
         file_bytes = file_obj.getvalue()
         with Image.open(io.BytesIO(file_bytes)) as img:
             img = ImageOps.exif_transpose(img).convert("RGB")
@@ -42,23 +50,20 @@ def process_image_unlimited(file_obj, target_res=OmegaCore.TARGET_RES):
             scale = t_w / img_w
             new_size = (t_w, int(img_h * scale))
             img_resized = img.resize(new_size, Image.Resampling.LANCZOS)
-            
             canvas = Image.new("RGB", target_res, (0, 0, 0))
-            y_offset = (t_h - img_resized.height) // 2
-            if y_offset < 0:
-                top_crop = abs(y_offset)
-                img_resized = img_resized.crop((0, top_crop, t_w, top_crop + t_h))
-                y_offset = 0
-            canvas.paste(img_resized, (0, y_offset))
+            y_off = (t_h - img_resized.height) // 2
+            if y_off < 0:
+                img_resized = img_resized.crop((0, abs(y_off), t_w, abs(y_off) + t_h))
+                y_off = 0
+            canvas.paste(img_resized, (0, y_off))
             return np.array(canvas)
     except:
         return np.zeros((target_res[1], target_res[0], 3), dtype="uint8")
 
 def draw_text_full_engine(text, config, res=OmegaCore.TARGET_RES):
-    """Pełny silnik renderujący - zachowuje wszystkie Twoje ustawienia wizualne."""
+    """Renderuje tekst z cieniem, blurem i obramowaniem."""
     txt_layer = Image.new("RGBA", res, (0, 0, 0, 0))
     shd_layer = Image.new("RGBA", res, (0, 0, 0, 0))
-    
     try:
         font = ImageFont.truetype(config['font_path'], config['f_size'])
     except:
@@ -67,40 +72,43 @@ def draw_text_full_engine(text, config, res=OmegaCore.TARGET_RES):
     draw_txt = ImageDraw.Draw(txt_layer)
     bbox = draw_txt.textbbox((0, 0), text, font=font)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    base_pos = ((res[0] - tw) // 2, (res[1] - th) // 2)
+    pos = ((res[0] - tw) // 2, (res[1] - th) // 2)
 
     # Render cienia
     draw_shd = ImageDraw.Draw(shd_layer)
     c_shd = config['shd_color'].lstrip('#')
     rgb_shd = tuple(int(c_shd[i:i+2], 16) for i in (0, 2, 4))
-    draw_shd.text((base_pos[0]+config['shd_x'], base_pos[1]+config['shd_y']), 
+    draw_shd.text((pos[0]+config['shd_x'], pos[1]+config['shd_y']), 
                   text, fill=(*rgb_shd, config['shd_alpha']), font=font)
     if config['shd_blur'] > 0:
         shd_layer = shd_layer.filter(ImageFilter.GaussianBlur(config['shd_blur']))
 
     # Render tekstu głównego
-    draw_txt.text(base_pos, text, fill=config['t_color'], font=font,
+    draw_txt.text(pos, text, fill=config['t_color'], font=font,
                   stroke_width=config['s_width'], stroke_fill=config['s_color'])
 
     combined = Image.new("RGBA", res, (0, 0, 0, 0))
     combined.paste(shd_layer, (0, 0), shd_layer)
     combined.paste(txt_layer, (0, 0), txt_layer)
-    return np.array(combined)
+    return combined
 
 # ==============================================================================
-# 3. UI - WSZYSTKIE TWOJE SUWAKI (BEZ ZMIAN)
+# 3. INTERFEJS UŻYTKOWNIKA (SIDEBAR)
 # ==============================================================================
 
 OmegaCore.setup_session()
-st.set_page_config(page_title="OMEGA UNLIMITED", layout="wide")
+st.set_page_config(page_title="Ω OMEGA UNLIMITED", layout="wide")
 mpy_config.change_settings({"IMAGEMAGICK_BINARY": OmegaCore.get_magick_path()})
 
 with st.sidebar:
-    st.header("⚙️ SYSTEM CONFIG")
-    speed = st.selectbox("Szybkość (s)", [0.1, 0.15, 0.2, 0.25], index=1)
+    st.title("⚙️ OMEGA CONFIG")
+    speed = st.selectbox("Szybkość przejść (s)", [0.1, 0.15, 0.2, 0.25], index=1)
+    
+    st.divider()
+    st.header("🎨 TYPOGRAFIA")
     f_font = st.selectbox("Czcionka", ["League Gothic Regular", "League Gothic Condensed", "Impact"])
     f_size = st.slider("Wielkość", 20, 500, 110)
-    t_color = st.color_picker("Tekst", "#FFFFFF")
+    t_color = st.color_picker("Kolor tekstu", "#FFFFFF")
     s_width = st.slider("Obramowanie", 0, 20, 3)
     s_color = st.color_picker("Kolor Obrysu", "#000000")
     
@@ -108,92 +116,102 @@ with st.sidebar:
     shd_x = st.slider("Cień X", -100, 100, 5)
     shd_y = st.slider("Cień Y", -100, 100, 5)
     shd_blur = st.slider("Cień Blur", 0, 50, 5)
-    shd_alpha = st.slider("Cień Alpha", 0, 255, 200)
+    shd_alpha = st.slider("Cień Alpha", 0, 255, 180)
     shd_color = st.color_picker("Kolor Cienia", "#000000")
     
+    st.divider()
     raw_texts = st.text_area("Baza Tekstów", "IG BRANDS AINT SAFE\nOMEGA GENESIS")
     texts_list = [t.strip() for t in raw_texts.split('\n') if t.strip()]
     
-    # Automatyczne ścieżki czcionek dla serwera
-    font_path = "arial.ttf"
-    if f_font == "Impact": font_path = "impact.ttf"
-    # Dopisujemy resztę logiki czcionek...
-    
     cfg = {
-        'font_path': font_path, 'f_size': f_size, 't_color': t_color,
+        'font_path': get_font_path(f_font), 'f_size': f_size, 't_color': t_color,
         's_width': s_width, 's_color': s_color, 'shd_x': shd_x, 'shd_y': shd_y,
         'shd_blur': shd_blur, 'shd_alpha': shd_alpha, 'shd_color': shd_color
     }
 
+    # ==========================================================================
+    # GREEN SCREEN PREVIEW SECTION
+    # ==========================================================================
+    st.divider()
+    st.header("👁️ GREEN SCREEN PREVIEW")
+    if texts_list:
+        # Generowanie klatki podglądu
+        p_bg = Image.new("RGB", OmegaCore.TARGET_RES, (0, 255, 0)) # Jaskrawa zieleń
+        t_lay = draw_text_full_engine(texts_list[0], cfg)
+        p_bg.paste(t_lay, (0, 0), t_lay)
+        st.image(p_bg, caption="Podgląd kontrastu (Green Screen)", use_container_width=True)
+        
+        if st.checkbox("Podgląd na czarnym"):
+            b_bg = Image.new("RGB", OmegaCore.TARGET_RES, (0, 0, 0))
+            b_bg.paste(t_lay, (0, 0), t_lay)
+            st.image(b_bg, use_container_width=True)
+
 # ==============================================================================
-# 4. SKARBIEC I SILNIK BEZ LIMITÓW
+# 4. SKARBIEC I SILNIK PRODUKCYJNY
 # ==============================================================================
 
-st.title("Ω OMEGA UNLIMITED")
-st.info("🚀 Tryb Unlimited: Możesz wrzucać setki plików. System przetwarza je strumieniowo.")
+st.title(f"Ω OMEGA {OmegaCore.VERSION}")
+st.info("📱 Tryb Unlimited Aktywny. Zdjęcia są przetwarzane strumieniowo (oszczędność RAM).")
 
 c1, c2, c3 = st.columns(3)
 with c1:
-    u_c = st.file_uploader("Okładki", type=['png','jpg','jpeg'], accept_multiple_files=True)
-    if u_c: st.session_state.vault_covers = u_c
+    u_c = st.file_uploader("Dodaj Okładki", type=['png','jpg','jpeg'], accept_multiple_files=True)
+    if u_c: st.session_state.v_covers = u_c
 with c2:
-    u_p = st.file_uploader("Zdjęcia (Bulk)", type=['png','jpg','jpeg'], accept_multiple_files=True)
-    if u_p: st.session_state.vault_photos = u_p
+    u_p = st.file_uploader("Dodaj Zdjęcia (Bulk)", type=['png','jpg','jpeg'], accept_multiple_files=True)
+    if u_p: st.session_state.v_photos = u_p
 with c3:
-    u_m = st.file_uploader("Muzyka", type=['mp3'], accept_multiple_files=True)
-    if u_m: st.session_state.vault_music = u_m
+    u_m = st.file_uploader("Dodaj Muzykę", type=['mp3'], accept_multiple_files=True)
+    if u_m: st.session_state.v_music = u_m
 
-if st.button("🔥 START OMEGA ENGINE (UNLIMITED)", use_container_width=True):
-    if not st.session_state.vault_covers or not st.session_state.vault_photos:
+if st.button("🔥 URUCHOM PRODUKCJĘ MASOWĄ", use_container_width=True):
+    if not st.session_state.v_covers or not st.session_state.v_photos:
         st.error("Skarbiec jest pusty!")
     else:
-        with st.status("🎬 Masowa produkcja...", expanded=True) as status:
+        st.session_state.v_results = []
+        with st.status("🎬 Renderowanie w toku...", expanded=True) as status:
             if not os.path.exists("temp"): os.makedirs("temp")
             
-            for idx, cov_file in enumerate(st.session_state.vault_covers):
-                st.write(f"🎞️ Składanie filmu {idx+1}...")
+            for idx, cov_file in enumerate(st.session_state.v_covers):
+                st.write(f"🎞️ Składanie filmu {idx+1}/{len(st.session_state.v_covers)}...")
                 
-                # Losujemy zdjęcia z puli bez wczytywania ich wszystkich do RAM
-                # To pozwala na posiadanie 1000 zdjęć w uploaderze!
-                sample_photos = random.sample(st.session_state.vault_photos, min(50, len(st.session_state.vault_photos)))
+                # Dobór zdjęć (strumieniowy)
+                sample = random.sample(st.session_state.v_photos, min(45, len(st.session_state.v_photos)))
                 
-                # Tworzymy klipy po kolei
+                # Budowa klipów
                 clips = [ImageClip(process_image_unlimited(cov_file)).set_duration(speed*3)]
-                for p in sample_photos:
-                    clips.append(ImageClip(process_image_unlimited(p)).set_duration(speed))
+                clips += [ImageClip(process_image_unlimited(p)).set_duration(speed) for p in sample]
                 
                 base = concatenate_videoclips(clips, method="chain")
                 
-                # Warstwa tekstowa
-                txt_img = draw_text_full_engine(random.choice(texts_list) if texts_list else "OMEGA", cfg)
-                txt_clip = ImageClip(txt_img).set_duration(base.duration)
+                # Warstwa tekstowa z pełnego silnika
+                t_arr = np.array(draw_text_full_engine(random.choice(texts_list) if texts_list else "OMEGA", cfg))
+                txt_clip = ImageClip(t_arr).set_duration(base.duration)
                 
                 final = CompositeVideoClip([base, txt_clip], size=OmegaCore.TARGET_RES)
                 
-                # Audio Fix
-                if st.session_state.vault_music:
-                    m_file = random.choice(st.session_state.vault_music)
+                # Obsługa Audio
+                if st.session_state.v_music:
+                    m_file = random.choice(st.session_state.v_music)
                     tmp_m = f"temp/a_{idx}.mp3"
                     with open(tmp_m, "wb") as f: f.write(m_file.getbuffer())
                     aud = AudioFileClip(tmp_m)
                     final = final.set_audio(aud.subclip(0, min(aud.duration, final.duration)))
 
                 out_name = f"OMEGA_EXPORT_{idx+1}.mp4"
-                # Używamy preset="ultrafast" i threads=4 dla maksymalnej szybkości serwera
-                final.write_videofile(out_n, fps=24, codec="libx264", audio_codec="aac", threads=4, logger=None, preset="ultrafast")
+                final.write_videofile(out_name, fps=24, codec="libx264", audio_codec="aac", threads=4, logger=None, preset="ultrafast")
                 
-                st.session_state.finished_videos.append(out_name)
-                
-                # KLUCZOWE: Pełne czyszczenie po każdej pętli
+                st.session_state.v_results.append(out_name)
                 final.close(); base.close(); gc.collect()
             
-            status.update(label="✅ WSZYSTKIE FILMY GOTOWE!", state="complete")
+            status.update(label="✅ PRODUKCJA ZAKOŃCZONA!", state="complete")
 
 # POBIERANIE
-if st.session_state.finished_videos:
+if st.session_state.v_results:
     st.divider()
+    st.header("📥 POBIERALNIA")
     cols = st.columns(4)
-    for i, vid in enumerate(st.session_state.finished_videos):
+    for i, vid in enumerate(st.session_state.v_results):
         if os.path.exists(vid):
             with open(vid, "rb") as f:
-                cols[i % 4].download_button(f"📥 Film {i+1}", f, file_name=vid)
+                cols[i % 4].download_button(f"🎥 Film {i+1}", f, file_name=vid)
