@@ -10,7 +10,7 @@ import moviepy.config as mpy_config
 # ==============================================================================
 
 class OmegaCore:
-    VERSION = "V12.89 UNLIMITED + SAFE-ZONE PREVIEW"
+    VERSION = "V12.89 UNLIMITED + MAX-SAFE-ZONE"
     TARGET_RES = (1080, 1920)
     
     @staticmethod
@@ -90,7 +90,7 @@ def draw_text_pancerny(text, config, res=OmegaCore.TARGET_RES):
     return combined
 
 # ==============================================================================
-# 3. INTERFEJS I KONFIGURACJA (SIDEBAR Z SYMULACJĄ SAFE-ZONE)
+# 3. INTERFEJS I KONFIGURACJA (SIDEBAR Z MAX SAFE-ZONE)
 # ==============================================================================
 
 OmegaCore.setup_session()
@@ -121,26 +121,24 @@ with st.sidebar:
     f_size_pre = st.slider("Wielkość", 20, 500, 83)
     t_color_pre = st.color_picker("Kolor tekstu", "#FFFFFF")
 
-    # --- LIVE PREVIEW Z SYMULACJĄ GÓRA/DÓŁ ---
-    st.header("👁️ SAFE-ZONE SIMULATOR")
+    # --- LIVE PREVIEW Z SYMULACJĄ 2.5x WIĘKSZĄ ---
+    st.header("👁️ ULTRA SAFE-ZONE")
     
-    # Tworzymy tło symulacji: Czarny (góra) -> Zielony (środek) -> Czarny (dół)
-    # Rozkład: 250px góra (czarny), 1420px środek (zielony), 250px dół (czarny)
-    sim_bg = Image.new("RGB", OmegaCore.TARGET_RES, (20, 20, 20)) # Ciemne tło ogólne
+    # Tło symulacji: Czarny (625px) -> Zielony (670px) -> Czarny (625px)
+    sim_bg = Image.new("RGB", OmegaCore.TARGET_RES, (15, 15, 15)) 
     draw_sim = ImageDraw.Draw(sim_bg)
-    # Rysujemy jasny zielony prostokąt w bezpiecznej strefie
-    draw_sim.rectangle([0, 250, 1080, 1670], fill=(0, 255, 0)) 
+    # Jasny zielony prostokąt (środkowa strefa bezpieczeństwa)
+    draw_sim.rectangle([0, 625, 1080, 1295], fill=(0, 255, 0)) 
     
-    # Renderujemy tekst podglądu
     tmp_cfg = {
         'font_path': get_font_path(f_font_pre), 'f_size': f_size_pre, 't_color': t_color_pre,
         's_width': 3, 's_color': "#000000", 'shd_x': 15, 'shd_y': 15,
         'shd_blur': 8, 'shd_alpha': 200, 'shd_color': "#000000"
     }
-    t_lay = draw_text_pancerny("SAFE ZONE TEST", tmp_cfg)
+    t_lay = draw_text_pancerny("ULTRA SAFE TEST", tmp_cfg)
     sim_bg.paste(t_lay, (0, 0), t_lay)
     
-    st.image(sim_bg, caption="Symulacja: Czarny (UI) | Zielony (Video)", use_container_width=True)
+    st.image(sim_bg, caption="Symulacja: Powiększone UI (Czarny)", use_container_width=True)
     st.divider()
 
     # --- RESZTA USTAWIEŃ ---
