@@ -2,8 +2,7 @@ import streamlit as st
 import os, gc, random, time, datetime, io, zipfile
 import numpy as np
 from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter, ImageEnhance
-from moviepy.editor import ImageClip, CompositeVideoClip, concatenate_videoclips, AudioFileClip, VideoFileClip
-from moviepy.video.fx import gamma_correction  # dostępne w nowszych wersjach moviepy
+from moviepy.editor import ImageClip, CompositeVideoClip, concatenate_videoclips, AudioFileClip, VideoFileClip # dostępne w nowszych wersjach moviepy
 import moviepy.config as mpy_config
 import imageio_ffmpeg  # zapewni ffmpeg jeśli systemowy nie istnieje
 
@@ -418,3 +417,4 @@ if st.session_state.zip_files:
         st.session_state.v_results = []
         st.session_state.zip_files = []
         st.rerun()
+
