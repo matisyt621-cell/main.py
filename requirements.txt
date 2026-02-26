@@ -4,3 +4,9 @@ Pillow
 numpy
 decorator
 tqdm
+streamlit
+Pillow
+numpy
+moviepy
+imageio-ffmpeg
+
