@@ -10,16 +10,18 @@ import moviepy.config as mpy_config
 # ==============================================================================
 
 class OmegaCore:
-    VERSION = "V12.99 ZIP-STABLE (20-PACK)"
+    VERSION = "V12.99 ZIP-STABLE (CUSTOM PACK SIZE)"
     TARGET_RES = (1080, 1920)
     SAFE_MARGIN = 90  # Margines boczny dla tekstu (Auto-Scale)
     
     @staticmethod
     def setup_session():
-        keys = ['v_covers', 'v_photos', 'v_music', 'v_results', 'zip_files']
+        keys = ['v_covers', 'v_photos', 'v_music', 'v_results', 'zip_files', 'pack_size']
         for key in keys:
             if key not in st.session_state:
                 st.session_state[key] = []
+        if 'pack_size' not in st.session_state:
+            st.session_state.pack_size = 70  # 🔥 DOMYŚLNIE 70 filmów na paczkę
 
     @staticmethod
     def get_magick_path():
@@ -141,16 +143,27 @@ with st.sidebar:
     st.image(sim_bg, caption="Podgląd reaguje na suwaki!", use_container_width=True)
     
     st.divider()
-
-    # ZMIANA: multiselect zamiast pojedynczego selectboxa
+    
+    # Wybór dozwolonych prędkości (multiselect)
     speed_options = st.multiselect(
-        "Dozwolone szybkości przejść (s)",
+        "🎞️ Dozwolone szybkości przejść (s)",
         options=[0.1, 0.11, 0.12, 0.15, 0.2, 0.25, 0.3],
         default=[0.1, 0.12, 0.15, 0.2]
     )
-    # Zabezpieczenie gdy nic nie wybrano
     if not speed_options:
-        speed_options = [0.1, 0.12, 0.15, 0.2]
+        speed_options = [0.1, 0.12, 0.15, 0.2]  # zabezpieczenie
+    
+    # 🔥 Rozmiar paczki ZIP – domyślnie 70
+    pack_size = st.number_input(
+        "📦 Filmy na paczkę ZIP",
+        min_value=1,
+        max_value=100,
+        value=st.session_state.pack_size,  # pobiera z session_state (70)
+        step=1
+    )
+    st.session_state.pack_size = pack_size
+    
+    st.divider()
     
     default_txts = (
         "Most unique spreadsheet rn\nIg brands ain't safe\nPOV: You created best ig brands spreadsheet\n"
@@ -170,7 +183,7 @@ with st.sidebar:
     texts_list = [t.strip() for t in raw_texts.split('\n') if t.strip()]
 
 # ==============================================================================
-# 4. SILNIK PRODUKCJI (MULTI-ZIP 20-PACK)
+# 4. SILNIK PRODUKCJI (MULTI-ZIP Z KONFIGUROWALNYM ROZMIAREM PACZKI)
 # ==============================================================================
 
 st.title(f"Ω OMEGA {OmegaCore.VERSION}")
@@ -190,30 +203,30 @@ if st.button("🚀 URUCHOM PRODUKCJĘ MASOWĄ", use_container_width=True):
             if not os.path.exists("temp"): os.makedirs("temp")
             
             for idx, cov_file in enumerate(u_c):
-                # 1. Losowanie prędkości dla bieżącego filmu
+                # Losowanie prędkości dla tego filmu
                 current_speed = random.choice(speed_options)
                 
-                # 2. TIME GUARD: Obliczanie długości (8.5-9.8s)
+                # Time Guard: długość filmu 8.5-9.8s
                 target_dur = random.uniform(8.5, 9.8)
                 cov_dur = current_speed * 3
                 num_photos = int((target_dur - cov_dur) / current_speed)
                 
-                st.write(f"🎞️ Film {idx+1}/{len(u_c)} | Czas: {target_dur:.1f}s | Prędkość: {current_speed}s | Zdjęć: {num_photos}")
+                st.write(f"🎞️ Film {idx+1}/{len(u_c)} | Prędkość: {current_speed}s | Czas: {target_dur:.1f}s | Zdjęć: {num_photos}")
                 
-                # Dobór klatek
+                # Dobór zdjęć
                 sample = random.sample(u_p, min(num_photos, len(u_p)))
                 clips = [ImageClip(process_image_916(cov_file)).set_duration(cov_dur)]
                 clips += [ImageClip(process_image_916(p)).set_duration(current_speed) for p in sample]
                 
                 base = concatenate_videoclips(clips, method="chain")
                 
-                # 3. AUTO-SCALE TEXT
+                # Nakładanie tekstu
                 t_arr = np.array(draw_text_pancerny(random.choice(texts_list), cfg))
                 txt_clip = ImageClip(t_arr).set_duration(base.duration)
                 
                 final = CompositeVideoClip([base, txt_clip], size=OmegaCore.TARGET_RES)
                 
-                # 4. AUDIO
+                # Audio
                 if u_m:
                     m_file = random.choice(u_m)
                     tmp_m = f"temp/a_{idx}.mp3"
@@ -226,9 +239,9 @@ if st.button("🚀 URUCHOM PRODUKCJĘ MASOWĄ", use_container_width=True):
                 st.session_state.v_results.append(out_name)
                 final.close(); base.close(); gc.collect()
 
-            # --- PAKOWANIE PO 20 SZTUK ---
-            st.write("📦 Dzielenie na paczki po 20 filmów...")
-            chunk_size = 20 
+            # --- PAKOWANIE WEDŁUG USTAWIONEGO ROZMIARU PACZKI ---
+            st.write(f"📦 Dzielenie na paczki po {st.session_state.pack_size} filmów...")
+            chunk_size = st.session_state.pack_size
             for i in range(0, len(st.session_state.v_results), chunk_size):
                 chunk = st.session_state.v_results[i:i + chunk_size]
                 part_num = (i // chunk_size) + 1
@@ -244,7 +257,7 @@ if st.button("🚀 URUCHOM PRODUKCJĘ MASOWĄ", use_container_width=True):
 # SEKCJA POBIERANIA
 if st.session_state.zip_files:
     st.divider()
-    st.subheader("📥 Gotowe paczki (po 20 filmów):")
+    st.subheader("📥 Gotowe paczki:")
     cols = st.columns(len(st.session_state.zip_files))
     for idx, zip_path in enumerate(st.session_state.zip_files):
         with open(zip_path, "rb") as f:
