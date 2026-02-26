@@ -2,27 +2,15 @@ import streamlit as st
 import os, gc, random, time, datetime, io, zipfile
 import numpy as np
 from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter, ImageEnhance
-from moviepy.editor import ImageClip, CompositeVideoClip, concatenate_videoclips, AudioFileClip, VideoFileClip # dostępne w nowszych wersjach moviepy
+from moviepy.editor import ImageClip, CompositeVideoClip, concatenate_videoclips, AudioFileClip
 import moviepy.config as mpy_config
-import imageio_ffmpeg  # zapewni ffmpeg jeśli systemowy nie istnieje
 
 # ==============================================================================
-# 0. KONFIGURACJA FFMPEG (jeśli nie znaleziono systemowego, użyj z imageio)
-# ==============================================================================
-try:
-    # próbujemy znaleźć ffmpeg w systemie
-    mpy_config.change_settings({"FFMPEG_BINARY": "ffmpeg"})
-except:
-    # jeśli nie działa, używamy ffmpeg z imageio
-    ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
-    mpy_config.change_settings({"FFMPEG_BINARY": ffmpeg_path})
-
-# ==============================================================================
-# 1. KONFIGURACJA RDZENIA OMEGA V13.0 (ANTY-TIKTOK)
+# 1. KONFIGURACJA RDZENIA OMEGA V13.0 (ANTY-TIKTOK) – bez ręcznego ffmpeg
 # ==============================================================================
 
 class OmegaCore:
-    VERSION = "V13.0 ANTY-TIKTOK (FULL PROTECTION)"
+    VERSION = "V13.0 ANTY-TIKTOK (LIGHT)"
     BASE_RES = (1080, 1920)          # bazowa rozdzielczość
     SAFE_MARGIN = 90
     
@@ -47,41 +35,44 @@ class OmegaCore:
 # 2. FUNKCJE ANTY-DETEKCYJNE
 # ==============================================================================
 
-def apply_antidetection_settings(target_res, fps, bitrate, audio_rate, brightness, gamma):
+def apply_antidetection_settings(target_res, base_fps, base_video_bitrate, base_audio_bitrate, base_brightness, base_gamma, enable_flags):
     """
     Modyfikuje parametry w sposób niezauważalny dla człowieka,
     ale mylący algorytmy detekcji.
-    Zwraca krotkę (zmodyfikowana_rozdzielczość, fps, bitrate, audio_rate)
+    enable_flags: słownik z flagami (res_shift, fps_random, video_bitrate_random, audio_bitrate_random, brightness_tweak, gamma_tweak)
+    Zwraca krotkę (zmodyfikowana_rozdzielczość, fps, video_bitrate, audio_bitrate, brightness, gamma)
     """
-    # 1. Rozdzielczość – zmiana o 2px (parzysta)
-    res_mod = (target_res[0] + random.choice([-2, 0, 2]), 
-               target_res[1] + random.choice([-2, 0, 2]))
+    res_mod = target_res
+    if enable_flags.get('res_shift', False):
+        res_mod = (target_res[0] + random.choice([-2, 0, 2]), 
+                   target_res[1] + random.choice([-2, 0, 2]))
     
-    # 2. FPS – ułamkowe (jeśli opcja włączona)
-    if fps == 30:
-        fps_mod = random.uniform(29.97, 30.03)
-    elif fps == 60:
-        fps_mod = random.uniform(59.94, 60.06)
-    else:
-        fps_mod = fps + random.uniform(-0.05, 0.05)
+    fps_mod = base_fps
+    if enable_flags.get('fps_random', False):
+        if base_fps == 30:
+            fps_mod = random.uniform(29.97, 30.03)
+        elif base_fps == 60:
+            fps_mod = random.uniform(59.94, 60.06)
+        else:
+            fps_mod = base_fps + random.uniform(-0.05, 0.05)
     
-    # 3. Bitrate – lekko zmieniony
-    if bitrate is not None:
-        bitrate_mod = int(bitrate * random.uniform(0.98, 1.02))
-    else:
-        bitrate_mod = None
+    video_bitrate_mod = base_video_bitrate
+    if enable_flags.get('video_bitrate_random', False) and base_video_bitrate is not None:
+        video_bitrate_mod = int(base_video_bitrate * random.uniform(0.98, 1.02))
     
-    # 4. Sample rate audio – do wyboru: 44100 lub 48000 z lekkim offsetem
-    if audio_rate == 48000:
-        audio_mod = 44100
-    else:
-        audio_mod = 48000
+    audio_bitrate_mod = base_audio_bitrate
+    if enable_flags.get('audio_bitrate_random', False) and base_audio_bitrate is not None:
+        audio_bitrate_mod = int(base_audio_bitrate * random.uniform(0.98, 1.02))
     
-    # 5. Jasność i gamma – zwracamy osobno do zastosowania na klipie
-    brightness_mod = brightness * random.uniform(0.99, 1.01)
-    gamma_mod = gamma * random.uniform(0.99, 1.01)
+    brightness_mod = base_brightness
+    if enable_flags.get('brightness_tweak', False):
+        brightness_mod = base_brightness * random.uniform(0.99, 1.01)
     
-    return res_mod, fps_mod, bitrate_mod, audio_mod, brightness_mod, gamma_mod
+    gamma_mod = base_gamma
+    if enable_flags.get('gamma_tweak', False):
+        gamma_mod = base_gamma * random.uniform(0.99, 1.01)
+    
+    return res_mod, fps_mod, video_bitrate_mod, audio_bitrate_mod, brightness_mod, gamma_mod
 
 def apply_image_adjustments(img_array, brightness=1.0, gamma=1.0):
     """Modyfikuje jasność i gamma obrazu (tablica numpy)"""
@@ -91,11 +82,10 @@ def apply_image_adjustments(img_array, brightness=1.0, gamma=1.0):
         img = enhancer.enhance(brightness)
     if gamma != 1.0:
         # korekcja gamma przez LUT
-        import math
-        gamma_corrected = np.array(img).astype(np.float32) / 255.0
-        gamma_corrected = np.power(gamma_corrected, gamma)
-        gamma_corrected = (gamma_corrected * 255).astype(np.uint8)
-        img = Image.fromarray(gamma_corrected)
+        img_np = np.array(img).astype(np.float32) / 255.0
+        img_np = np.power(img_np, gamma)
+        img_np = (img_np * 255).astype(np.uint8)
+        img = Image.fromarray(img_np)
     return np.array(img)
 
 # ==============================================================================
@@ -180,7 +170,7 @@ def draw_text_pancerny(text, config, res=OmegaCore.BASE_RES):
 
 OmegaCore.setup_session()
 st.set_page_config(page_title="Ω OMEGA V13.0 ANTY-TIKTOK", layout="wide")
-mpy_config.change_settings({"IMAGEMAGICK_BINARY": OmegaCore.get_magick_path()})
+mpy_config.change_settings({"IMAGEMAGICK_BINARY": OmegaCore.get_magick_path()})  # tylko ImageMagick, ffmpeg zostawiamy domyślnie
 
 with st.sidebar:
     st.title("⚙️ KONFIGURACJA")
@@ -241,16 +231,16 @@ with st.sidebar:
         with col1:
             res_shift = st.checkbox("🖼️ Zmiana rozdzielczości o 2px", value=True)
             fps_random = st.checkbox("⏱️ Losowy FPS (np. 29.97)", value=True)
-            bitrate_random = st.checkbox("📊 Losowy bitrate", value=True)
+            video_bitrate_random = st.checkbox("📊 Losowy bitrate wideo", value=True)
         with col2:
-            audio_switch = st.checkbox("🎵 Przełączanie sample rate", value=True)
+            audio_bitrate_random = st.checkbox("🎵 Losowy bitrate audio", value=True)
             brightness_tweak = st.checkbox("☀️ Modyfikacja jasności (+/-1%)", value=True)
             gamma_tweak = st.checkbox("🎚️ Modyfikacja gamma", value=True)
         
         # Domyślne wartości (będą modyfikowane)
         default_fps = st.selectbox("Bazowe FPS", [24, 30, 60], index=1)
-        default_bitrate = st.number_input("Bazowy bitrate (kb/s)", value=5000, step=100)
-        default_audio_rate = st.selectbox("Bazowy sample rate audio", [44100, 48000], index=1)
+        default_video_bitrate = st.number_input("Bazowy bitrate wideo (kb/s)", value=5000, step=100)
+        default_audio_bitrate = st.number_input("Bazowy bitrate audio (kb/s)", value=192, step=16)
     
     st.divider()
     
@@ -292,6 +282,16 @@ if st.button("🚀 URUCHOM PRODUKCJĘ MASOWĄ (ANTY-TIKTOK)", use_container_widt
         with st.status("🎬 Renderowanie z ochroną anty-TikTok...", expanded=True) as status:
             if not os.path.exists("temp"): os.makedirs("temp")
             
+            # Flagi anty-detekcyjne
+            anti_flags = {
+                'res_shift': res_shift if enable_anti else False,
+                'fps_random': fps_random if enable_anti else False,
+                'video_bitrate_random': video_bitrate_random if enable_anti else False,
+                'audio_bitrate_random': audio_bitrate_random if enable_anti else False,
+                'brightness_tweak': brightness_tweak if enable_anti else False,
+                'gamma_tweak': gamma_tweak if enable_anti else False
+            }
+            
             for idx, cov_file in enumerate(u_c):
                 # ---- Losowanie prędkości dla tego filmu ----
                 current_speed = random.choice(speed_options)
@@ -304,35 +304,15 @@ if st.button("🚀 URUCHOM PRODUKCJĘ MASOWĄ (ANTY-TIKTOK)", use_container_widt
                 st.write(f"🎞️ Film {idx+1}/{len(u_c)} | Prędkość: {current_speed}s | Czas: {target_dur:.1f}s | Zdjęć: {num_photos}")
                 
                 # ---- Przygotowanie parametrów anty-detekcyjnych ----
-                if enable_anti:
-                    res_mod, fps_mod, bitrate_mod, audio_mod, bright_mod, gamma_mod = apply_antidetection_settings(
-                        OmegaCore.BASE_RES,
-                        default_fps,
-                        default_bitrate if bitrate_random else None,
-                        default_audio_rate,
-                        1.0,   # bazowa jasność
-                        1.0    # bazowa gamma
-                    )
-                    # Jeśli któraś opcja wyłączona, używamy wartości bazowych
-                    if not res_shift:
-                        res_mod = OmegaCore.BASE_RES
-                    if not fps_random:
-                        fps_mod = default_fps
-                    if not bitrate_random:
-                        bitrate_mod = default_bitrate
-                    if not audio_switch:
-                        audio_mod = default_audio_rate
-                    if not brightness_tweak:
-                        bright_mod = 1.0
-                    if not gamma_tweak:
-                        gamma_mod = 1.0
-                else:
-                    res_mod = OmegaCore.BASE_RES
-                    fps_mod = default_fps
-                    bitrate_mod = default_bitrate
-                    audio_mod = default_audio_rate
-                    bright_mod = 1.0
-                    gamma_mod = 1.0
+                res_mod, fps_mod, v_bitrate_mod, a_bitrate_mod, bright_mod, gamma_mod = apply_antidetection_settings(
+                    OmegaCore.BASE_RES,
+                    default_fps,
+                    default_video_bitrate,
+                    default_audio_bitrate,
+                    1.0,   # bazowa jasność
+                    1.0,   # bazowa gamma
+                    anti_flags
+                )
                 
                 # ---- Tworzenie klipów z modyfikacją jasności/gamma ----
                 # Okładka
@@ -361,7 +341,6 @@ if st.button("🚀 URUCHOM PRODUKCJĘ MASOWĄ (ANTY-TIKTOK)", use_container_widt
                     tmp_m = f"temp/a_{idx}.mp3"
                     with open(tmp_m, "wb") as f: f.write(m_file.getbuffer())
                     aud = AudioFileClip(tmp_m)
-                    # Jeśli sample rate ma być zmieniony, moviepy sam dokona konwersji przy zapisie
                     final = final.set_audio(aud.subclip(0, min(aud.duration, final.duration)))
                 
                 # ---- Zapis z wybranymi parametrami ----
@@ -371,8 +350,8 @@ if st.button("🚀 URUCHOM PRODUKCJĘ MASOWĄ (ANTY-TIKTOK)", use_container_widt
                     fps=fps_mod,
                     codec="libx264",
                     audio_codec="aac",
-                    bitrate=None if bitrate_mod is None else f"{bitrate_mod}k",
-                    audio_bitrate=None if audio_mod is None else f"{audio_mod}k",  # moviepy użyje audio_bitrate do konwersji
+                    bitrate=None if v_bitrate_mod is None else f"{v_bitrate_mod}k",
+                    audio_bitrate=None if a_bitrate_mod is None else f"{a_bitrate_mod}k",
                     threads=4,
                     logger=None,
                     preset="ultrafast"
@@ -417,4 +396,3 @@ if st.session_state.zip_files:
         st.session_state.v_results = []
         st.session_state.zip_files = []
         st.rerun()
-
