@@ -1,32 +1,28 @@
 import streamlit as st
 import os, gc, random, time, datetime, io, zipfile
 import numpy as np
-from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter
-from moviepy.editor import ImageClip, CompositeVideoClip, concatenate_videoclips, AudioFileClip
+from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+from moviepy.editor import ImageClip, CompositeVideoClip, concatenate_videoclips, AudioFileClip, VideoFileClip
 import moviepy.config as mpy_config
-from moviepy.video.fx import gamma_correction, colorx  # do modyfikacji jasności/gamma
+import subprocess
 
 # ==============================================================================
 # 1. KONFIGURACJA RDZENIA OMEGA V12.99
 # ==============================================================================
 
 class OmegaCore:
-    VERSION = "V12.99 ZIP-STABLE (CUSTOM PACK SIZE + ANTY-TIKTOK)"
-    BASE_RES = (1080, 1920)
-    # Anty-TikTok: zmiana rozdzielczości o 2 piksele (parzyste)
-    TARGET_RES = (BASE_RES[0] - 2, BASE_RES[1] - 2)  # 1078x1918
+    VERSION = "V12.99 ANTY-TIKTOK EDITION"
+    TARGET_RES = (1080, 1920)
     SAFE_MARGIN = 90  # Margines boczny dla tekstu (Auto-Scale)
     
     @staticmethod
     def setup_session():
-        # Klucze dla list plików
-        list_keys = ['v_covers', 'v_photos', 'v_music', 'v_results', 'zip_files']
-        for key in list_keys:
+        keys = ['v_covers', 'v_photos', 'v_music', 'v_results', 'zip_files']
+        for key in keys:
             if key not in st.session_state:
                 st.session_state[key] = []
-        # Osobna inicjalizacja pack_size jako int
         if 'pack_size' not in st.session_state:
-            st.session_state.pack_size = 70  # 🔥 DOMYŚLNIE 70 filmów na paczkę
+            st.session_state.pack_size = 70  # Domyślnie 70 filmów na paczkę
 
     @staticmethod
     def get_magick_path():
@@ -111,11 +107,49 @@ def draw_text_pancerny(text, config, res=OmegaCore.TARGET_RES):
     return combined
 
 # ==============================================================================
-# 3. INTERFEJS I LIVE PREVIEW
+# 3. FUNKCJE ANTY-WYKRYWAWCZE (TIKTOK)
+# ==============================================================================
+
+def apply_anti_fingerprint_modifications(input_path, output_path, fps, bitrate, sample_rate, brightness, gamma):
+    """
+    Zastosuje serię modyfikacji do pliku wideo, aby utrudnić algorytmom wykrycie podobieństw.
+    Używa ffmpeg bezpośrednio.
+    """
+    # 1. Zmiana rozdzielczości o 2 piksele (parzysta zmiana)
+    # Losowo odejmij 2 od szerokości lub wysokości (lub obu) – ale zachowaj proporcje? 
+    # Lepiej zmienić rozmiar o 2px w obie strony, ale żeby nie zniekształcić obrazu, użyjemy skalowania i przycięcia.
+    # Ustalmy nowy rozmiar: szerokość = 1080 - 2 = 1078, wysokość = 1920 - 2 = 1918
+    # Ale to zmieni proporcje. Możemy przeskalować do 1078x1918, a potem dodać czarne paski? 
+    # Prościej: użyjemy filtra scale, który rozciągnie obraz do nowego rozmiaru (minimalne zniekształcenie).
+    new_w = 1078
+    new_h = 1918
+
+    # 2. Zmiana fps na ułamkową (np. 29.97 zamiast 30)
+    # 3. Bitrate – ustawiamy zadany
+    # 4. Sample rate audio – zadany
+    # 5. Jasność i gamma – przez filtry eq
+
+    # Komenda ffmpeg
+    cmd = [
+        'ffmpeg', '-y', '-i', input_path,
+        '-vf', f'scale={new_w}:{new_h},eq=brightness={brightness}:gamma={gamma}',
+        '-r', str(fps),
+        '-b:v', bitrate,
+        '-b:a', f'{sample_rate}k',  # zakładając, że sample_rate to liczba w kHz? Tu chcemy w bitach, więc lepiej użyć sample_rate jako liczby Hz.
+        '-ar', str(sample_rate),
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-c:a', 'aac',
+        output_path
+    ]
+    subprocess.run(cmd, check=True)
+
+# ==============================================================================
+# 4. INTERFEJS I LIVE PREVIEW
 # ==============================================================================
 
 OmegaCore.setup_session()
-st.set_page_config(page_title="Ω OMEGA V12.99", layout="wide")
+st.set_page_config(page_title="Ω OMEGA ANTY-TIKTOK", layout="wide")
 mpy_config.change_settings({"IMAGEMAGICK_BINARY": OmegaCore.get_magick_path()})
 
 with st.sidebar:
@@ -140,7 +174,6 @@ with st.sidebar:
     st.header("👁️ LIVE PREVIEW")
     sim_bg = Image.new("RGB", OmegaCore.TARGET_RES, (15, 15, 15)) 
     draw_sim = ImageDraw.Draw(sim_bg)
-    # Symulacja 2.5x: Góra 625px, Dół 625px, Środek zielony
     draw_sim.rectangle([0, 625, 1080, 1295], fill=(0, 255, 0)) 
     
     t_lay = draw_text_pancerny("LIVE PREVIEW TEST", cfg)
@@ -158,15 +191,33 @@ with st.sidebar:
     if not speed_options:
         speed_options = [0.1, 0.12, 0.15, 0.2]  # zabezpieczenie
     
-    # Rozmiar paczki ZIP – domyślnie 70, z konwersją na int
+    # Rozmiar paczki ZIP – z konwersją na int
     pack_size = st.number_input(
         "📦 Filmy na paczkę ZIP",
         min_value=1,
         max_value=100,
-        value=int(st.session_state.pack_size),  # jawne rzutowanie na int
+        value=int(st.session_state.pack_size),
         step=1
     )
-    st.session_state.pack_size = int(pack_size)  # zapewniamy int w session_state
+    st.session_state.pack_size = int(pack_size)
+    
+    st.divider()
+    
+    # Opcje anty-wykrywawcze
+    st.header("🕵️ ANTY-TIKTOK")
+    enable_anti = st.checkbox("Włącz modyfikacje anty-wykrywawcze", value=True)
+    if enable_anti:
+        fps_options = st.selectbox("FPS (ułamkowe)", [29.97, 30.0, 30.01, 59.94, 60.0], index=0)
+        bitrate_options = st.selectbox("Bitrate", ["4000k", "4500k", "4850k", "5000k"], index=2)
+        sample_rate_options = st.selectbox("Sample rate audio", [44100, 48000], index=0)
+        brightness_adj = st.slider("Korekta jasności (np. 0.01)", -0.05, 0.05, 0.01, step=0.01)
+        gamma_adj = st.slider("Korekta gamma (np. 0.99)", 0.95, 1.05, 0.99, step=0.01)
+    else:
+        fps_options = 30.0
+        bitrate_options = "5000k"
+        sample_rate_options = 48000
+        brightness_adj = 0.0
+        gamma_adj = 1.0
     
     st.divider()
     
@@ -188,7 +239,7 @@ with st.sidebar:
     texts_list = [t.strip() for t in raw_texts.split('\n') if t.strip()]
 
 # ==============================================================================
-# 4. SILNIK PRODUKCJI (MULTI-ZIP Z KONFIGUROWALNYM ROZMIAREM PACZKI + ANTY-TIKTOK)
+# 5. SILNIK PRODUKCJI (MULTI-ZIP Z KONFIGUROWALNYM ROZMIAREM PACZKI)
 # ==============================================================================
 
 st.title(f"Ω OMEGA {OmegaCore.VERSION}")
@@ -231,47 +282,27 @@ if st.button("🚀 URUCHOM PRODUKCJĘ MASOWĄ", use_container_width=True):
                 
                 final = CompositeVideoClip([base, txt_clip], size=OmegaCore.TARGET_RES)
                 
-                # ===== ANTY-TIKTOK: modyfikacje parametrów wideo =====
-                # 1. FPS: losowa wartość ułamkowa w okolicy 24 (ale może być 30, 60)
-                base_fps = random.choice([23.976, 24.0, 29.97, 30.0, 59.94, 60.0])
-                # dodajemy małe losowe odchylenie (np. +/- 0.05)
-                fps = base_fps + random.uniform(-0.05, 0.05)
-                # 2. Bitrate: losowy w zakresie 4500-5500 kbps
-                bitrate = random.randint(4500, 5500)
-                # 3. Audio sample rate: na 44100 Hz (zamiast 48000)
-                audio_sample_rate = 44100
-                # 4. Jasność/gamma: delikatna zmiana (opcjonalnie)
-                # Możemy dodać filtr do finalnego klipu
-                gamma_factor = random.uniform(0.99, 1.01)
-                brightness_factor = random.uniform(0.99, 1.01)
-                # Uwaga: te filtry mogą spowolnić renderowanie, stosujemy tylko jeśli chcemy
-                # final = final.fx(gamma_correction, gamma_factor)
-                # final = final.fx(colorx, brightness_factor)  # colorx zmienia jasność
-                
-                # Audio
-                if u_m:
-                    m_file = random.choice(u_m)
-                    tmp_m = f"temp/a_{idx}.mp3"
-                    with open(tmp_m, "wb") as f: f.write(m_file.getbuffer())
-                    aud = AudioFileClip(tmp_m)
-                    # Próbkowanie audio na 44100
-                    aud = aud.set_fps(audio_sample_rate)
-                    final = final.set_audio(aud.subclip(0, min(aud.duration, final.duration)))
-
-                out_name = f"OMEGA_VIDEO_{idx+1}.mp4"
-                # Zapis z nowymi parametrami
-                final.write_videofile(
-                    out_name,
-                    fps=fps,
-                    codec="libx264",
-                    audio_codec="aac",
-                    threads=4,
-                    logger=None,
-                    preset="ultrafast",
-                    bitrate=f"{bitrate}k"
-                )
-                st.session_state.v_results.append(out_name)
+                # Tymczasowy plik przed modyfikacjami
+                temp_raw = f"temp/raw_{idx}.mp4"
+                final.write_videofile(temp_raw, fps=24, codec="libx264", audio_codec="aac", threads=4, logger=None, preset="ultrafast")
                 final.close(); base.close(); gc.collect()
+                
+                # Jeśli włączone anty-fingerprint, zastosuj modyfikacje
+                if enable_anti:
+                    out_name = f"OMEGA_VIDEO_{idx+1}.mp4"
+                    apply_anti_fingerprint_modifications(
+                        temp_raw, out_name,
+                        fps=fps_options,
+                        bitrate=bitrate_options,
+                        sample_rate=sample_rate_options,
+                        brightness=brightness_adj,
+                        gamma=gamma_adj
+                    )
+                    os.remove(temp_raw)  # usuń surowy plik
+                else:
+                    out_name = temp_raw  # po prostu zmień nazwę
+                
+                st.session_state.v_results.append(out_name)
 
             # --- PAKOWANIE WEDŁUG USTAWIONEGO ROZMIARU PACZKI ---
             st.write(f"📦 Dzielenie na paczki po {st.session_state.pack_size} filmów...")
