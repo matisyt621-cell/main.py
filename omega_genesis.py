@@ -141,7 +141,16 @@ with st.sidebar:
     st.image(sim_bg, caption="Podgląd reaguje na suwaki!", use_container_width=True)
     
     st.divider()
-    speed = st.selectbox("Szybkość przejść (s)", [0.1, 0.12, 0.15, 0.2], index=2)
+
+    # ZMIANA: multiselect zamiast pojedynczego selectboxa
+    speed_options = st.multiselect(
+        "Dozwolone szybkości przejść (s)",
+        options=[0.1, 0.11, 0.12, 0.15, 0.2, 0.25, 0.3],
+        default=[0.1, 0.12, 0.15, 0.2]
+    )
+    # Zabezpieczenie gdy nic nie wybrano
+    if not speed_options:
+        speed_options = [0.1, 0.12, 0.15, 0.2]
     
     default_txts = (
         "Most unique spreadsheet rn\nIg brands ain't safe\nPOV: You created best ig brands spreadsheet\n"
@@ -181,27 +190,30 @@ if st.button("🚀 URUCHOM PRODUKCJĘ MASOWĄ", use_container_width=True):
             if not os.path.exists("temp"): os.makedirs("temp")
             
             for idx, cov_file in enumerate(u_c):
-                # 1. TIME GUARD: Obliczanie długości (8.5-9.8s)
-                target_dur = random.uniform(8.5, 9.8)
-                cov_dur = speed * 3
-                num_photos = int((target_dur - cov_dur) / speed)
+                # 1. Losowanie prędkości dla bieżącego filmu
+                current_speed = random.choice(speed_options)
                 
-                st.write(f"🎞️ Film {idx+1}/{len(u_c)} | Czas: {target_dur:.1f}s | Zdjęć: {num_photos}")
+                # 2. TIME GUARD: Obliczanie długości (8.5-9.8s)
+                target_dur = random.uniform(8.5, 9.8)
+                cov_dur = current_speed * 3
+                num_photos = int((target_dur - cov_dur) / current_speed)
+                
+                st.write(f"🎞️ Film {idx+1}/{len(u_c)} | Czas: {target_dur:.1f}s | Prędkość: {current_speed}s | Zdjęć: {num_photos}")
                 
                 # Dobór klatek
                 sample = random.sample(u_p, min(num_photos, len(u_p)))
                 clips = [ImageClip(process_image_916(cov_file)).set_duration(cov_dur)]
-                clips += [ImageClip(process_image_916(p)).set_duration(speed) for p in sample]
+                clips += [ImageClip(process_image_916(p)).set_duration(current_speed) for p in sample]
                 
                 base = concatenate_videoclips(clips, method="chain")
                 
-                # 2. AUTO-SCALE TEXT
+                # 3. AUTO-SCALE TEXT
                 t_arr = np.array(draw_text_pancerny(random.choice(texts_list), cfg))
                 txt_clip = ImageClip(t_arr).set_duration(base.duration)
                 
                 final = CompositeVideoClip([base, txt_clip], size=OmegaCore.TARGET_RES)
                 
-                # 3. AUDIO
+                # 4. AUDIO
                 if u_m:
                     m_file = random.choice(u_m)
                     tmp_m = f"temp/a_{idx}.mp3"
@@ -222,7 +234,6 @@ if st.button("🚀 URUCHOM PRODUKCJĘ MASOWĄ", use_container_width=True):
                 part_num = (i // chunk_size) + 1
                 zip_n = f"OMEGA_PART_{part_num}.zip"
                 
-                # Używamy ZIP_STORED, żeby nie marnować RAMu na ponowną kompresję MP4
                 with zipfile.ZipFile(zip_n, 'w', compression=zipfile.ZIP_STORED) as z:
                     for f in chunk:
                         if os.path.exists(f): z.write(f)
@@ -230,7 +241,7 @@ if st.button("🚀 URUCHOM PRODUKCJĘ MASOWĄ", use_container_width=True):
             
             status.update(label="✅ PRODUKCJA I PAKOWANIE ZAKOŃCZONE!", state="complete")
 
-# SEKCOJA POBIERANIA
+# SEKCJA POBIERANIA
 if st.session_state.zip_files:
     st.divider()
     st.subheader("📥 Gotowe paczki (po 20 filmów):")
