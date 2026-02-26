@@ -4,22 +4,27 @@ import numpy as np
 from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter
 from moviepy.editor import ImageClip, CompositeVideoClip, concatenate_videoclips, AudioFileClip
 import moviepy.config as mpy_config
+from moviepy.video.fx import gamma_correction, colorx  # do modyfikacji jasności/gamma
 
 # ==============================================================================
 # 1. KONFIGURACJA RDZENIA OMEGA V12.99
 # ==============================================================================
 
 class OmegaCore:
-    VERSION = "V12.99 ZIP-STABLE (CUSTOM PACK SIZE)"
-    TARGET_RES = (1080, 1920)
+    VERSION = "V12.99 ZIP-STABLE (CUSTOM PACK SIZE + ANTY-TIKTOK)"
+    BASE_RES = (1080, 1920)
+    # Anty-TikTok: zmiana rozdzielczości o 2 piksele (parzyste)
+    TARGET_RES = (BASE_RES[0] - 2, BASE_RES[1] - 2)  # 1078x1918
     SAFE_MARGIN = 90  # Margines boczny dla tekstu (Auto-Scale)
     
     @staticmethod
     def setup_session():
-        keys = ['v_covers', 'v_photos', 'v_music', 'v_results', 'zip_files', 'pack_size']
-        for key in keys:
+        # Klucze dla list plików
+        list_keys = ['v_covers', 'v_photos', 'v_music', 'v_results', 'zip_files']
+        for key in list_keys:
             if key not in st.session_state:
                 st.session_state[key] = []
+        # Osobna inicjalizacja pack_size jako int
         if 'pack_size' not in st.session_state:
             st.session_state.pack_size = 70  # 🔥 DOMYŚLNIE 70 filmów na paczkę
 
@@ -153,7 +158,7 @@ with st.sidebar:
     if not speed_options:
         speed_options = [0.1, 0.12, 0.15, 0.2]  # zabezpieczenie
     
-    # 🔥 Rozmiar paczki ZIP – domyślnie 70, z konwersją na int
+    # Rozmiar paczki ZIP – domyślnie 70, z konwersją na int
     pack_size = st.number_input(
         "📦 Filmy na paczkę ZIP",
         min_value=1,
@@ -183,7 +188,7 @@ with st.sidebar:
     texts_list = [t.strip() for t in raw_texts.split('\n') if t.strip()]
 
 # ==============================================================================
-# 4. SILNIK PRODUKCJI (MULTI-ZIP Z KONFIGUROWALNYM ROZMIAREM PACZKI)
+# 4. SILNIK PRODUKCJI (MULTI-ZIP Z KONFIGUROWALNYM ROZMIAREM PACZKI + ANTY-TIKTOK)
 # ==============================================================================
 
 st.title(f"Ω OMEGA {OmegaCore.VERSION}")
@@ -226,16 +231,45 @@ if st.button("🚀 URUCHOM PRODUKCJĘ MASOWĄ", use_container_width=True):
                 
                 final = CompositeVideoClip([base, txt_clip], size=OmegaCore.TARGET_RES)
                 
+                # ===== ANTY-TIKTOK: modyfikacje parametrów wideo =====
+                # 1. FPS: losowa wartość ułamkowa w okolicy 24 (ale może być 30, 60)
+                base_fps = random.choice([23.976, 24.0, 29.97, 30.0, 59.94, 60.0])
+                # dodajemy małe losowe odchylenie (np. +/- 0.05)
+                fps = base_fps + random.uniform(-0.05, 0.05)
+                # 2. Bitrate: losowy w zakresie 4500-5500 kbps
+                bitrate = random.randint(4500, 5500)
+                # 3. Audio sample rate: na 44100 Hz (zamiast 48000)
+                audio_sample_rate = 44100
+                # 4. Jasność/gamma: delikatna zmiana (opcjonalnie)
+                # Możemy dodać filtr do finalnego klipu
+                gamma_factor = random.uniform(0.99, 1.01)
+                brightness_factor = random.uniform(0.99, 1.01)
+                # Uwaga: te filtry mogą spowolnić renderowanie, stosujemy tylko jeśli chcemy
+                # final = final.fx(gamma_correction, gamma_factor)
+                # final = final.fx(colorx, brightness_factor)  # colorx zmienia jasność
+                
                 # Audio
                 if u_m:
                     m_file = random.choice(u_m)
                     tmp_m = f"temp/a_{idx}.mp3"
                     with open(tmp_m, "wb") as f: f.write(m_file.getbuffer())
                     aud = AudioFileClip(tmp_m)
+                    # Próbkowanie audio na 44100
+                    aud = aud.set_fps(audio_sample_rate)
                     final = final.set_audio(aud.subclip(0, min(aud.duration, final.duration)))
 
                 out_name = f"OMEGA_VIDEO_{idx+1}.mp4"
-                final.write_videofile(out_name, fps=24, codec="libx264", audio_codec="aac", threads=4, logger=None, preset="ultrafast")
+                # Zapis z nowymi parametrami
+                final.write_videofile(
+                    out_name,
+                    fps=fps,
+                    codec="libx264",
+                    audio_codec="aac",
+                    threads=4,
+                    logger=None,
+                    preset="ultrafast",
+                    bitrate=f"{bitrate}k"
+                )
                 st.session_state.v_results.append(out_name)
                 final.close(); base.close(); gc.collect()
 
