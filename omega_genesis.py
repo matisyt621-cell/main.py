@@ -153,15 +153,15 @@ with st.sidebar:
     if not speed_options:
         speed_options = [0.1, 0.12, 0.15, 0.2]  # zabezpieczenie
     
-    # 🔥 Rozmiar paczki ZIP – domyślnie 70
+    # 🔥 Rozmiar paczki ZIP – domyślnie 70, z konwersją na int
     pack_size = st.number_input(
         "📦 Filmy na paczkę ZIP",
         min_value=1,
         max_value=100,
-        value=st.session_state.pack_size,  # pobiera z session_state (70)
+        value=int(st.session_state.pack_size),  # jawne rzutowanie na int
         step=1
     )
-    st.session_state.pack_size = pack_size
+    st.session_state.pack_size = int(pack_size)  # zapewniamy int w session_state
     
     st.divider()
     
